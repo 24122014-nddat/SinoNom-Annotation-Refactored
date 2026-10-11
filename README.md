@@ -335,3 +335,32 @@ Character localization, DINO damaged-character detection, and the reading-order 
 ## License
 
 No repository-level license file is currently included. Review applicable permissions for the code, bundled fonts, source documents, and external model assets before reuse or redistribution.
+
+### Extract missing inscription images
+
+Use the IDs in a copy report to extract complete faces from the four configured
+PDF volumes. The helper decodes PDF headings and `Kí hiệu` using existing glyph
+profiles, joins adjacent image strips, assigns images in PDF order to the full
+metadata ID list, then exports only missing faces.
+
+```bash
+.venv/bin/python helpers/extract_missing_images.py --dry-run
+.venv/bin/python helpers/extract_missing_images.py
+```
+
+Defaults: `helpers/copy_report.json`, `configs/`, and `data/extracted_images/`.
+Override with `--report`, `--config-dir`, or `--output-dir`. Output names use IDs
+padded to at least five digits (`07055.png`). Existing images are skipped unless
+`--overwrite` is supplied. Dry runs do not write files. Normal runs write
+`extraction_report.json` alongside images, including PDF pages and image regions.
+A count mismatch, duplicate ID, or uncertain match is reported as `needs_review`
+and is not exported. The command exits with status 1 if any IDs remain unresolved
+or a volume fails; successfully matched images still appear in the output.
+
+The helper also applies explicitly verified exceptions for faces 20324,
+22695–22697, 33651a/b, 45233–45234, 48889 and 42893. These assignments use
+confirmed PDF pages, excluding supplemental faces and end-of-volume noise.
+ID 20325 is assigned to inscription 103 at PDF page 507; the surplus ID in inscription 104 is excluded. ID 33651
+produces two files, `33651a.png` and `33651b.png`. Both outputs appear under
+`outputs` in its report entry. These exceptions are scoped to the bundled
+volume names and inscription numbers in `VERIFIED_FACES`.

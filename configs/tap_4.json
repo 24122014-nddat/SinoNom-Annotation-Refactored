@@ -75,7 +75,7 @@
         "Toát yếu"
       ]
     },
-    "face_marker_pattern": "^\\s*<\\s*(?P<id>\\d+)\\s*>?\\s*(?P<rest>.*)$",
+    "face_marker_pattern": "^\\s*<\\s*(?P<id>\\d+[A-Za-z]?)\\s*>?\\s*(?P<rest>.*)$",
     "require_consecutive_numbers": true
   }
 }

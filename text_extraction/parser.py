@@ -69,7 +69,7 @@ def _match_label(text: str, label: str) -> str | None:
 
 def _identifier_values(value: str) -> list[str]:
     """Extract each numeric identifier, regardless of its surrounding notation."""
-    return re.findall(r"\d+", value)
+    return re.findall(r"\d+[A-Za-z]?", value)
 
 
 def _matching_identifier(marker_id: str, identifiers: list[str]) -> str | None:
