@@ -7,7 +7,7 @@
   "gradio": {
     "image_dir": "../data/images",
     "output_dir": "../data/annotations",
-    "show_metadata_fields": false
+    "show_metadata_fields": true
   },
   "encoded_fonts": {
     "Calibri": "../fonts/calibri.ttf",
