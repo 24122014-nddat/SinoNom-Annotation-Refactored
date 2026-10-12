@@ -74,10 +74,7 @@ def update_bboxes(state, boxes, active=None, selected=None):
         set(normalized) == set(state['regions'])
         and bool(state.get('annotations'))
     )
-    membership_changed = set(normalized) != set(state['regions'])
     state['regions'] = normalized
-    if membership_changed:
-        clear_box_orders(state)
 
     selected = list(dict.fromkeys(selected or []))
     selected = [uid for uid in selected if uid in state['regions']]
@@ -95,7 +92,6 @@ def sync_draft_boxes(state, payload, materialize_alignment=True):
 
     log.info('APPLY: frontend/Python received count=%d IDs=%s', len(boxes), list(boxes))
 
-    previous_ids = set(state['regions'])
     previous_count = len(state['regions'])
     update_bboxes(state, boxes, payload.get('active'), payload.get('selected'))
     if len(state['regions']) != previous_count:
@@ -116,11 +112,11 @@ def sync_draft_boxes(state, payload, materialize_alignment=True):
     for uid, box in state['regions'].items():
         normalize_flags(box)
 
+    # The browser snapshot includes orders assigned after local Add/Delete.
+    # A changed backend membership must not erase a subsequent browser sort.
     # Orders are draft metadata and may be incomplete.  Apply saves progress;
     # only a complete 1..N set materializes the public alignment mapping.
     orders = payload.get('orders', {})
-    if set(state['regions']) != previous_ids:
-        orders = {uid: None for uid in state['regions']}
     if not orders:
         orders = {uid: box.get('order') for uid, box in state['regions'].items()}
     for uid in state['regions']:
