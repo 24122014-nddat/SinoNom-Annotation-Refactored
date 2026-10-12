@@ -17,11 +17,17 @@ def validate_coordinates(bbox, size):
     return list(bbox)
 
 
+def clear_box_orders(state):
+    for box in state['regions'].values():
+        box['order'] = None
+    invalidate(state, clear=True)
+
+
 def add_bbox(state, bbox):
     coords = validate_coordinates(bbox, state['image_size'])
     uid = uuid4().hex
     state['regions'][uid] = dict(bbox=coords, status='intact', unknown=False, unavailable_font=False, expert_prediction=False, suspicious=False)
-    invalidate(state, clear=True)
+    clear_box_orders(state)
     return uid
 
 
@@ -68,7 +74,10 @@ def update_bboxes(state, boxes, active=None, selected=None):
         set(normalized) == set(state['regions'])
         and bool(state.get('annotations'))
     )
+    membership_changed = set(normalized) != set(state['regions'])
     state['regions'] = normalized
+    if membership_changed:
+        clear_box_orders(state)
 
     selected = list(dict.fromkeys(selected or []))
     selected = [uid for uid in selected if uid in state['regions']]
@@ -86,6 +95,7 @@ def sync_draft_boxes(state, payload, materialize_alignment=True):
 
     log.info('APPLY: frontend/Python received count=%d IDs=%s', len(boxes), list(boxes))
 
+    previous_ids = set(state['regions'])
     previous_count = len(state['regions'])
     update_bboxes(state, boxes, payload.get('active'), payload.get('selected'))
     if len(state['regions']) != previous_count:
@@ -109,6 +119,8 @@ def sync_draft_boxes(state, payload, materialize_alignment=True):
     # Orders are draft metadata and may be incomplete.  Apply saves progress;
     # only a complete 1..N set materializes the public alignment mapping.
     orders = payload.get('orders', {})
+    if set(state['regions']) != previous_ids:
+        orders = {uid: None for uid in state['regions']}
     if not orders:
         orders = {uid: box.get('order') for uid, box in state['regions'].items()}
     for uid in state['regions']:
@@ -153,6 +165,7 @@ def delete_bbox(state, region_uid):
             if str(item) != str(box_id)
         ]
     del state['regions'][region_uid]
+    clear_box_orders(state)
     if state['selected_region_uid'] == region_uid:
         state['selected_region_uid'] = None
     state['workflow'].update(alignment_valid=False, status_valid=False,

@@ -33,6 +33,11 @@ const canSortBoxes = () => {
   return canEditReadingOrder() && (matched || confirmed);
 };
 
+const clearAllBoxOrders = () => {
+  Object.values(localBoxes).forEach(box => { box.order = null; });
+  updateCanvasLabels();
+};
+
 const orderedClearTargets = () => {
   const ids = selectedIds.size ? [...selectedIds] : Object.keys(localBoxes);
   return ids.filter(id => {
@@ -1297,6 +1302,7 @@ element.addEventListener('pointerup', event => {
       let newId;
       do { newId = `box_new_${nextTemporaryBoxId++}`; } while (localBoxes[newId]);
       localBoxes[newId] = { bbox: [...bbox], status: 'intact', unknown: false, unavailable_font: false, expert_prediction: false, suspicious: false, order: null };
+      clearAllBoxOrders();
       mismatchConfirmationInvalidated = true;
       clearMismatchIssueSelection();
 
@@ -1506,6 +1512,7 @@ root.addEventListener('click', event => {
     });
     selectedIds.clear();
     activeBoxId = null;
+    clearAllBoxOrders();
     mismatchConfirmationInvalidated = true;
     clearMismatchIssueSelection();
     isDirty = true;
@@ -1674,6 +1681,7 @@ window.addEventListener('keydown', event => {
     });
     selectedIds.clear();
     activeBoxId = null;
+    clearAllBoxOrders();
     mismatchConfirmationInvalidated = true;
     clearMismatchIssueSelection();
     isDirty = true;
