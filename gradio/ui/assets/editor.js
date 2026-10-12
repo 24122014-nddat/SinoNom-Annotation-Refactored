@@ -24,6 +24,15 @@ const canEditReadingOrder = () => {
   return step === 3 && Boolean(props.value?.contentVerified);
 };
 
+const canSortBoxes = () => {
+  const boxCount = Object.keys(localBoxes).length;
+  const matched = boxCount > 0 && boxCount === Number(props.value?.characterCount);
+  const confirmed = !mismatchConfirmationInvalidated
+    && Boolean(props.value?.mismatchConfirmed)
+    && Number(props.value?.mismatchBoxCount) === boxCount;
+  return canEditReadingOrder() && (matched || confirmed);
+};
+
 const orderedClearTargets = () => {
   const ids = selectedIds.size ? [...selectedIds] : Object.keys(localBoxes);
   return ids.filter(id => {
@@ -84,9 +93,9 @@ const updateValidationSummary = () => {
     'mismatch-unconfirmed', !mismatchConfirmed);
   const sortButton = root.querySelector('button#sort-boxes, #sort-boxes button');
   if (sortButton) {
-    sortButton.disabled = !canOrder;
-    sortButton.title = canOrder ? ''
-      : 'Verify content before editing reading order.';
+    sortButton.disabled = !canSortBoxes();
+    sortButton.title = canSortBoxes() ? ''
+      : 'Verify content and confirm a source mismatch before sorting unmatched boxes.';
   }
   const clearButton = root.querySelector('button#clear-box-orders, #clear-box-orders button');
   if (clearButton) {
@@ -1530,7 +1539,7 @@ root.addEventListener('click', event => {
   }
   const sortBtn = event.target.closest('#sort-boxes');
   if (sortBtn) {
-    if (pending || !canEditReadingOrder()) {
+    if (pending || !canSortBoxes()) {
       event.preventDefault();
       return;
     }
@@ -1574,7 +1583,7 @@ root.addEventListener('click', event => {
       ? [...selectedIds] : Object.keys(localBoxes);
     const sameTargets = request && currentIds.length === request.targetIds.length
       && currentIds.every(id => request.targetIds.includes(id));
-    if (!pending && canEditReadingOrder() && sameTargets) {
+    if (!pending && canSortBoxes() && sameTargets) {
       if (request.scope === 'all' && !selectedIds.size) sortAllBoxes();
       else if (request.scope === 'selected' && selectedIds.size) openSortSelectedModal();
     }
@@ -1590,6 +1599,10 @@ root.addEventListener('click', event => {
   }
   const confirmSortModal = event.target.closest('#sort-modal-confirm');
   if (confirmSortModal) {
+    if (pending || !canSortBoxes()) {
+      event.preventDefault();
+      return;
+    }
     const startInput = root.querySelector('#sort-modal-start');
     const start = parseInt(startInput?.value || '1', 10);
     const modal = root.querySelector('#sort-selected-modal');

@@ -200,11 +200,8 @@ class Invariants(unittest.TestCase):
         cleared=engine.apply(s,'clear_source_mismatch')
         self.assertFalse(source_mismatch_confirmed(cleared))
         self.assertFalse(cleared['workflow']['bbox_valid'])
-        sorted_state=engine.apply(cleared,'sort_boxes')
-        self.assertEqual(sorted(box['order'] for box in sorted_state['regions'].values()),[1,2,3])
-        self.assertFalse(sorted_state['workflow']['alignment_valid'])
-        with self.assertRaisesRegex(ValueError,'confirm a source mismatch'):
-            engine.apply(sorted_state,'next')
+        with self.assertRaisesRegex(ValueError,'Confirm a source mismatch'):
+            engine.apply(cleared,'sort_boxes')
 
     def test_complete_mismatch_order_materializes_character_tokens(self):
         s=state('永寺',n=3)

@@ -484,6 +484,8 @@ class Workflow:
             if step != 3:
                 raise ValueError('Sort bounding boxes in Step 3.')
             refresh_bbox_validation(s)
+            if not (s['workflow']['bbox_valid'] or source_mismatch_confirmed(s)):
+                raise ValueError('Confirm a source mismatch before sorting unmatched boxes.')
             from .state import _spatial_region_order
             ordered_uids = _spatial_region_order(s)
             for order, uid in enumerate(ordered_uids, 1):

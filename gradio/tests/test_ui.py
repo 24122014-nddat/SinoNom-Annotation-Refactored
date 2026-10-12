@@ -107,6 +107,11 @@ class GradioCallbacks(unittest.TestCase):
                 'allBoxes':boxes,
                 'selectedIds':['left','middle'],
             }
+            confirmation=state.pop('source_mismatch')
+            rejected_unconfirmed=on_action(ctx,gr.EventData(None,{
+                'action':'sort_boxes_calc','payload':dict(sort_payload,sortRequestId='unconfirmed')}))
+            self.assertEqual(rejected_unconfirmed[8]['value']['calcSortedBoxIds'],[])
+            state['source_mismatch']=confirmation
             responses=[]
             first=on_action(ctx,gr.EventData(None,{
                 'action':'sort_boxes_calc',
@@ -141,7 +146,7 @@ class GradioCallbacks(unittest.TestCase):
                 'action':'sort_boxes_calc','payload':changed_membership}))
             self.assertEqual(changed[8]['value']['sortRequestId'],
                              'sort-changed-membership')
-            self.assertEqual(changed[8]['value']['calcSortedBoxIds'],['middle','left'])
+            self.assertEqual(changed[8]['value']['calcSortedBoxIds'],[])
             invalid_payload=dict(sort_payload,boxes={},sortRequestId='sort-rejected')
             rejected=on_action(ctx,gr.EventData(None,{
                 'action':'sort_boxes_calc','payload':invalid_payload}))

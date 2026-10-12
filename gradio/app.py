@@ -1173,6 +1173,10 @@ def create_app(options):
                     refresh_bbox_validation(transient)
                     if not transient['workflow']['content_verified']:
                         raise ValueError('Verify the content before sorting boxes.')
+                    if transient['current_step'] != 3:
+                        raise ValueError('Sort bounding boxes in Step 3.')
+                    if not (transient['workflow']['bbox_valid'] or source_mismatch_confirmed(transient)):
+                        raise ValueError('Confirm a source mismatch before sorting unmatched boxes.')
                     boxes={
                         str(uid):(box.get('bbox') if isinstance(box,dict) else box)
                         for uid,box in raw.items()
