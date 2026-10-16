@@ -1,83 +1,79 @@
-# Vietnamica Alignment
+# SinoNom Annotation Tool
 
-An interactive extraction and annotation workflow for Hán/Nôm inscriptions. Recover structured text from PDFs, localize characters in inscription images, and verify character-level alignments through a Gradio interface.
+![Python: ≥3.11](https://img.shields.io/badge/Python-%E2%89%A53.11-3776AB?logo=python&logoColor=white)
+![Gradio: 6.28.0](https://img.shields.io/badge/Gradio-6.28.0-F97316)
 
-![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white)
-![Gradio](https://img.shields.io/badge/Gradio-6.28.0-F97316?style=flat-square)
-![PyMuPDF](https://img.shields.io/badge/PDF-PyMuPDF-2563EB?style=flat-square)
-![PyTorch](https://img.shields.io/badge/Detection-PyTorch-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)
+## Introduction
 
-## Overview
+Vietnamica Alignment is a semi-automated tool for annotating Hán–Nôm inscriptions. It combines structured text extraction from PDFs with character-level alignment to inscription images and manual verification through a Gradio interface.
 
-Vietnamica Alignment connects document text extraction with image-based inscription annotation. Document-specific configurations define how PDF text is decoded and parsed. The annotation interface pairs each image with its source record and guides reviewers through content, geometry, character status, reading order, and crop verification.
+Reviewers can correct source content, character locations, reading order, and damage labels before exporting structured JSON. The resulting annotations can support downstream research on inscription text, character recognition, and document damage.
 
-Automation proposes text records, character boxes, damage labels, and spatial order. Reviewers correct these proposals and explicitly confirm source discrepancies before exporting annotations.
+## Key Features
 
-> [!NOTE]
-> The Gradio application reads source JSON; PDF extraction runs separately. Detection supplies character locations and damage proposals. Character labels come from verified source text, not OCR recognition.
+- **PDF text extraction:** Decode embedded glyphs and generate structured inscription records.
+- **Character detection and box editing:** Detect character regions or draw and adjust bounding boxes manually.
+- **Text alignment and reading order:** Assign characters to boxes and correct box order and text sequence.
+- **Damage annotation:** Label characters as intact or damaged, with light, medium, or severe damage levels and character flags.
+- **Source verification:** Review text and metadata, and record missing text, extra text, or other source mismatches.
+- **Crop metadata:** Define the crop region recorded in export geometry.
+- **JSON export:** Download saved annotations, verified content, and source mismatches in one ZIP archive.
 
-## Key features
-
-- **Configurable PDF extraction:** embedded-font decoding, reusable glyph profiles, margin and footnote filtering, and structured inscription records.
-- **Optional assisted detection:** OCR character localization, DINO damage detection, box fusion, and heuristic reading order.
-- **Interactive verification:** edit boxes, correct source sections, reorder character cards, and review intact or damaged status.
-- **Explicit uncertainty:** unknown flags for damaged characters, suspicious-content flags, and confirmed missing or extra source characters.
-- **Structured exports:** per-image JSON, verified content, discrepancy records, crop/resize metadata, and a consolidated ZIP archive.
-- **Record preparation:** batch extraction, priority-based record merging, and image/source compatibility checks.
-
-## Workflow
+## Repository Structure
 
 ```text
-PDF + reference fonts + document config
-                  │
-           Glyph profile → Text extraction → Source JSON
-                                                  │
-Inscription images ────────────────────────────────┤
-                                                  ▼
-                                Gradio verification
-                          Content → Boxes → Status & Order
-                                  → Crop → Review → Save
-                                                  │
-                                  Per-image JSON + ZIP export
+configs/          # Per-volume settings
+fonts/            # Reference and display fonts
+text_extraction/  # PDF decoding and structured record extraction
+text_detection/   # Detection, box fusion, and reading order
+gradio/           # Annotation UI, validation, and export
+scripts/          # Batch extraction, record processing, and analysis
+helpers/          # Data preparation and inspection utilities
+tests/            # Tests; UI tests also live in gradio/tests/
 ```
 
-Reviewed source JSON can enter the workflow directly. Manual annotation runs without detector models or the ML stack.
+Input PDFs, inscription images, source JSON, matching reference fonts, and pretrained model assets may need to be provided separately.
 
-## Repository structure
+## Annotation Workflow
 
-```text
-Vietnamica-Alignment/
-├── configs/                 # Per-volume extraction and annotation settings
-├── fonts/                   # Reference fonts and Hán/Nôm display fonts
-├── text_extraction/         # Font discovery, glyph decoding, and record parsing
-├── text_detection/          # Localization, fusion, and reading order
-│   ├── runtime/             # OCR executable adapter and layout heuristic
-│   ├── models/              # External detector assets
-│   └── work/                # Generated preprocessing images
-├── gradio/
-│   ├── app.py               # Annotation application entry point
-│   ├── annotation/          # Workflow, validation, persistence, and export
-│   ├── crop/                # Crop geometry and resize metadata
-│   ├── ui/                  # Interface components, JavaScript, and CSS
-│   ├── tests/               # Annotation, export, and UI callback tests
-│   └── requirements.txt     # Manual annotation dependencies
-├── scripts/                 # Batch extraction and record preparation
-├── helpers/                 # PDF font inspection
-├── tests/                   # Extraction and detection tests
-├── pyproject.toml           # Base dependencies and optional detection extra
-├── requirements.txt         # Full Linux / CUDA runtime
-└── uv.lock                  # Lockfile for the pyproject environment
+1. **Image:** Select an inscription image and start verification.
+2. **Content:** Review and correct the source text and configured metadata.
+3. **Bounding Boxes & Sort:** Detect characters or draw boxes manually, then assign their order.
+4. **Status & Order:** Check character assignments, reorder text, and set intact/damaged status, damage levels, and flags.
+5. **Crop:** Adjust the crop region used in export metadata.
+6. **Review:** Inspect the final image and JSON, then save the annotation.
+
+**Download All** exports saved results as a ZIP archive.
+
+## Getting Started
+
+### Prerequisites
+
+| Mode | Runtime | Dependencies |
+| --- | --- | --- |
+| Full detection | Linux x86_64, Python 3.11, CUDA 12.1-compatible environment | `requirements.txt` |
+| Manual annotation | Python ≥ 3.11; launch with `--skip-detection` | `gradio/requirements.txt` |
+
+The full runtime requirements are pinned for Kaggle Linux/CUDA and are not intended as a general macOS/CPU installation.
+
+### Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/VongHaiYen11/SinoNom-Annotation.git
+cd SinoNom-Annotation
 ```
 
-`input/`, `data/`, `examples/`, `output/`, and `merged_records/` are local input or generated-data directories excluded from version control. Supply your own PDFs, images, and source records.
+For the full detection runtime:
 
-## Installation
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+```
 
-Run commands from the repository root in an isolated environment.
-
-### Manual annotation
-
-The project declares Python **3.11 or later**. The checked-in `.python-version` selects **3.12**; use **3.11** for the pinned CUDA runtime below.
+For manual annotation, use a Python ≥ 3.11 interpreter:
 
 ```bash
 python3 -m venv .venv
@@ -85,127 +81,28 @@ source .venv/bin/activate
 python -m pip install -r gradio/requirements.txt
 ```
 
-Gradio, Pillow, and `regex` are sufficient for annotation with `--skip-detection`.
+### Model Setup
 
-### PDF extraction only
+For the full detection runtime, download the **Damage Localization Model** and **OCR Model** linked in the [AutoHDR Model Zoo](https://github.com/SCUT-DLVCLab/AutoHDR#-model-zoo). Extract and arrange the required files as follows:
 
-Install the base dependencies declared in `pyproject.toml`, plus NumPy for glyph-profile generation. NumPy is included in the full requirements but absent from the base project dependencies.
-
-```bash
-python -m pip install fonttools==4.65.0 pymupdf==1.28.2 numpy==1.26.4
+```text
+text_detection/models/
+├── ckpts/
+│   ├── damage_detect.py       # Matching DINO configuration
+│   └── damage_detect.pth      # Damage-localization checkpoint
+└── dists/det_model/
+    └── det_model             # OCR executable; retain accompanying resources
 ```
 
-### Full extraction and detection runtime
-
-Use a separate **Python 3.11, Linux x86_64** environment for the supplied CUDA 12.1 requirements:
+Rename downloaded files as needed or supply `--vague-det-config`, `--vague-det-weights`, and `--ocr-det-executable`. The config must match the checkpoint, and the executable must support the host platform. Upstream environment instructions differ from this repo's pinned requirements; keep the environments separate. Qwen/DiffHDR restoration models are not required for this workflow.
 
 ```bash
-python -m pip install -r requirements.txt
+chmod +x text_detection/models/dists/det_model/det_model
 ```
 
-The file pins PyTorch `2.1.0+cu121`, torchvision `0.16.0+cu121`, MMCV `2.1.0`, MMEngine `0.10.5`, and MMDetection `3.3.0`, alongside extraction and annotation dependencies.
+### Prepare Input Data
 
-> [!IMPORTANT]
-> The root requirements target the Kaggle Linux/CUDA environment documented in the file. They are not a portable macOS or CPU installation recipe. The optional `text-detection` extra in `pyproject.toml` specifies a different Torch range and omits MMDetection/MMCV; it does not provide the complete pinned runtime. Detector assets must be supplied separately.
-
-## Usage
-
-### Configure and launch the annotation application
-
-Start with [configs/tap_1.json](configs/tap_1.json) or the matching volume configuration.
-
-| Setting | Purpose |
-| --- | --- |
-| `paths.output_json` | Source inscription JSON |
-| `gradio.image_dir` | Flat folder of inscription images |
-| `gradio.output_dir` | Saved annotations and export archive |
-| `records.content.start_heading` | Section supplying the Hán/Nôm character sequence |
-| `records.content.section_headings` | Sections shown for content verification |
-| `gradio.show_metadata_fields` | Whether configured string metadata is editable |
-
-Configuration paths resolve relative to the configuration file. CLI path overrides resolve from the working directory. The application still reads its configuration when all data paths are overridden.
-
-```bash
-python gradio/app.py --config configs/tap_1.json --skip-detection
-```
-
-Override data locations as needed:
-
-```bash
-python gradio/app.py --config configs/tap_1.json --skip-detection \
-  --image-dir /path/to/images \
-  --source-json /path/to/source.json \
-  --output-dir /path/to/annotations
-```
-
-With the detection runtime and assets installed, omit `--skip-detection`:
-
-```bash
-python gradio/app.py --config configs/tap_1.json
-```
-
-Open the local URL printed in the terminal. The default host is `127.0.0.1`; Gradio selects an available port. Use `--port 7861` for a fixed port, `--server-name 0.0.0.0` to bind all interfaces, or `--share` to create a public Gradio link. Run `python gradio/app.py --help` for all options.
-
-### Verify an inscription
-
-1. **Image:** select an image and click **Start Verification**.
-2. **Content:** correct the configured source sections. The original Hán/Nôm section supplies the character sequence.
-3. **Bounding Boxes & Sort:** run detection or draw/edit boxes manually. Sort all or selected boxes, or assign order numbers. Every box needs a unique order from `1` to `n` before continuing.
-4. **Status & Order:** review `intact`/`damaged` labels and damage levels (1 light, 2 medium, 3 severe), flag unknown damaged characters, reorder character cards to match boxes, and mark suspicious content.
-5. **Crop:** adjust the crop frame. Export metadata scales crops whose longest side exceeds 4096 pixels.
-6. **Review:** inspect the image and JSON, then click **Save Annotation**.
-
-If counts differ, confirm **Missing Content** for more boxes than characters or **Extra Content** for more characters than boxes. Missing content uses `MISS` cards; extra characters are retained as excluded characters. **Other**, with a required note, records an unmappable issue and proceeds directly to Review.
-
-**Next** validates stage transitions and retains edits in the current session. **Save Annotation** persists annotations and verified content without modifying the source JSON. **History** lists completed and unfinished images; saved annotations can be reopened. **Download All** exports saved records only, excluding unsaved drafts.
-
-### Extract source text from a PDF
-
-Configure `input_pdf_path`, `paths.glyph_profile`, and `paths.output_json`. Adjust page filters, metadata labels, section headings, and face-marker patterns for the document.
-
-Inspect embedded fonts and supply matching Unicode reference fonts in `fonts/`:
-
-```bash
-python helpers/list_pdf_fonts.py /path/to/document.pdf
-python -m text_extraction.font_discovery --config configs/tap_1.json
-python -m text_extraction.glyph_profile --config configs/tap_1.json
-python -m text_extraction.main --config configs/tap_1.json
-```
-
-Font discovery matches embedded family/style metadata and updates `encoded_fonts` in the configuration. Profile generation and extraction also run discovery automatically. Build the profile before extraction; reuse it for the corresponding PDF/font set.
-
-Extraction writes valid records to `paths.output_json` and format-review items to `<output-stem>_invalid.json`. Structural validation does not establish transcription accuracy.
-
-<details>
-<summary>Batch extraction and record preparation</summary>
-
-Process PDFs directly inside `input/`, named with a `Tap-N` prefix and matched to `configs/tap_N.json`:
-
-```bash
-python scripts/extract_input_pdfs.py
-python scripts/extract_input_pdfs.py --only Tap-3
-```
-
-The batch runner reuses existing nonempty glyph profiles or builds missing ones, then writes `output/extraction_summary.txt`.
-
-Merge recognized volume files from `examples/` and `output/`, then check source compatibility:
-
-```bash
-python scripts/merge_record_files.py
-python scripts/check_merged_records.py --image-dir /path/to/images
-```
-
-Recognized sources include bare volume filenames such as `Tap-1_Bia-Hau.json` and matching `_valid.json`, `_tag-corrected.json`, or `_manual-review.json` files. Duplicate face IDs resolve by priority: **manual review → tag corrections → valid extraction**. Filenames such as `tap_1.json` do not match the merge script's volume naming convention.
-
-Both default input directories must exist. Merged records go to `merged_records/`; use the appropriate file as the app's `--source-json`. Pass `--image-dir` to the merge command to filter out faces without matching images.
-
-</details>
-
-## Input format
-
-Images must occupy a flat folder with unique filename stems. Supported extensions are `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, `.webp`, and `.bmp`. Each stem must identify exactly one face through `ky_hieu`: `12305.jpg` corresponds to `"ky_hieu": "12305"`. Exact matching is attempted first, followed by a numeric leading-zero fallback.
-
-Source JSON is a UTF-8 array of inscription records. A minimal example for the default configuration is:
+Place images and source JSON in a folder such as `input/data-student/student_001/`. Image stems must be unique and match exactly one `noi_dung[].ky_hieu`. Minimal source JSON for `12305.jpg`:
 
 ```json
 [
@@ -214,10 +111,7 @@ Source JSON is a UTF-8 array of inscription records. A minimal example for the d
       {
         "ky_hieu": "12305",
         "chuyen_muc": [
-          {
-            "tieu_de": "Nguyên văn chữ Hán Nôm",
-            "van_ban": "永樂"
-          }
+          {"tieu_de": "Nguyên văn chữ Hán Nôm", "van_ban": "永樂"}
         ]
       }
     ]
@@ -225,177 +119,297 @@ Source JSON is a UTF-8 array of inscription records. A minimal example for the d
 ]
 ```
 
-Each matching face needs exactly one text section whose `tieu_de` equals `records.content.start_heading`. That heading must also appear in `section_headings`. Additional metadata, transcription, and summary sections may be included.
+Keep the Vietnamese JSON keys and section labels shown above: they are part of the configured input schema. Each face requires exactly one section matching `records.content.start_heading`. Records may come from multiple volumes; `source_file` does not control image matching. CLI inputs are server-local paths, not remote data URLs.
 
-Alignment applies NFC normalization, removes whitespace and Unicode punctuation, then segments extended grapheme clusters using `regex`. Box counts follow this normalized sequence rather than raw string length.
+### Run the Application
 
-## Output format
+```bash
+python gradio/app.py --config configs/tap_1.json \
+  --image-dir input/data-student/student_001 \
+  --source-json input/data-student/student_001/student_001.json \
+  --output-dir annotations/student_001
+```
 
-A normal saved annotation has this shape. This illustrative example uses an unscaled 1000 × 1000 image:
+Open the URL printed in the terminal. Add `--skip-detection` for manual boxes or `--share` for a public Gradio link. Results are saved under `annotations/student_001`; **Download All** creates `annotations.zip`. Download saved results before ending a Kaggle session.
+
+## JSON Output
+
+`annotations.zip` contains `text_annotations.json`, `inscription_content.json`, and `source_mismatches.json`. Each file contains a **top-level JSON array of objects** with zero, one, or multiple records. Each record represents one inscription image or face, identified by `image`. Empty categories are `[]`. Match records by `image`, not by array position. The examples below use illustrative 1000 × 1000 images.
+
+### `text_annotations.json`
+
+Character assignments, bounding boxes, damage labels, and geometry for images saved as normal annotations.
+
+<details>
+<summary><code>text_annotations.json</code> — Example</summary>
 
 ```json
-{
-  "image": "12305.jpg",
-  "bounding_boxes": {
-    "1": {"bbox": [120, 350, 180, 420], "status": "intact", "damage_level": null, "unknown": false, "unavailable_font": false, "expert_prediction": false, "suspicious": true},
-    "2": {"bbox": [120, 450, 180, 520], "status": "damaged", "damage_level": 3, "unknown": true, "unavailable_font": false, "expert_prediction": false, "suspicious": false}
+[
+  {
+    "image": "12305.jpg",
+    "bounding_boxes": {
+      "1": {
+        "bbox": [100, 100, 150, 150],
+        "status": "intact",
+        "damage_level": null,
+        "unknown": false,
+        "unavailable_font": false,
+        "expert_prediction": false,
+        "suspicious": false
+      }
+    },
+    "annotations": {"1": "永"},
+    "image_resize": {
+      "source_size": [1000, 1000],
+      "output_size": [1000, 1000],
+      "scale_x": 1.0,
+      "scale_y": 1.0
+    },
+    "crop": {
+      "top_left": [0, 0],
+      "top_right": [1000, 0],
+      "bottom_right": [1000, 1000],
+      "bottom_left": [0, 1000]
+    }
   },
-  "annotations": {"1": "永", "2": "樂"},
-  "image_resize": {
-    "source_size": [1000, 1000],
-    "output_size": [1000, 1000],
-    "scale_x": 1.0,
-    "scale_y": 1.0
-  },
-  "crop": {
-    "top_left": [100, 200],
-    "top_right": [900, 200],
-    "bottom_right": [900, 900],
-    "bottom_left": [100, 900]
+  {
+    "image": "12306.jpg",
+    "bounding_boxes": {
+      "1": {
+        "bbox": [100, 100, 150, 150],
+        "status": "damaged",
+        "damage_level": 2,
+        "unknown": false,
+        "unavailable_font": false,
+        "expert_prediction": false,
+        "suspicious": false
+      }
+    },
+    "annotations": {"1": "樂"},
+    "image_resize": {
+      "source_size": [1000, 1000],
+      "output_size": [1000, 1000],
+      "scale_x": 1.0,
+      "scale_y": 1.0
+    },
+    "crop": {
+      "top_left": [0, 0],
+      "top_right": [1000, 0],
+      "bottom_right": [1000, 1000],
+      "bottom_left": [0, 1000]
+    }
   }
-}
+]
 ```
+
+</details>
 
 | Field | Meaning |
 | --- | --- |
-| `bounding_boxes` | Contiguous string IDs `"1"` through `"n"`, ordered for character assignment |
-| `bbox` | `[x1, y1, x2, y2]` in original-image pixel coordinates |
-| `damage_level` | `1` light, `2` medium, `3` severe; `null` for intact or an unclassified draft |
-| `status` / `unknown` | Physical condition and an independent unknown flag for damaged characters |
-| `unavailable_font` / `expert_prediction` / `suspicious` | Required per-box boolean flags; suspicious can combine with font/expert flags but cannot combine with unknown |
-| `annotations` | One normalized character per box; `MISS` denotes missing source content in mismatch records |
-| `image_resize` | Source/output dimensions and scale factors |
-| `crop` | Four corners in resized-image coordinates |
-| `issue_type` | Source mismatch type only: missing_text, extra_text, or other; absent from normal annotations |
+| `image` | Image filename; identifies the face within the dataset. |
+| `bounding_boxes` | Map of box IDs, starting at `"1"` for each image. |
+| `bounding_boxes[id].bbox` | `[x1, y1, x2, y2]` in original-image pixels. |
+| `bounding_boxes[id].status` | `intact` or `damaged`. |
+| `bounding_boxes[id].damage_level` | `1` light, `2` medium, `3` severe; `null` for intact. Required for damaged boxes when applying or confirming status. |
+| `bounding_boxes[id].unknown` | Unidentified damaged character; cannot coexist with the other character flags. |
+| `bounding_boxes[id].unavailable_font` | Character marked as unavailable in the font. |
+| `bounding_boxes[id].expert_prediction` | Character interpretation marked as an expert prediction. |
+| `bounding_boxes[id].suspicious` | Character assignment flagged for review. |
+| `annotations` | Box ID → assigned grapheme. |
+| `image_resize` | Original/output `[width, height]` in `source_size`/`output_size`, plus `scale_x` and `scale_y`. |
+| `crop` | `top_left`, `top_right`, `bottom_right`, `bottom_left` in resized-image coordinates. Metadata only; no cropped image is exported. |
 
-> [!IMPORTANT]
-> Boxes remain in original-image coordinates; crop corners refer to `image_resize.output_size`. Apply the scale factors when combining these geometries. Export stores JSON metadata, not cropped image files.
+### `inscription_content.json`
 
-Normal annotations are saved as `<output-dir>/<image-stem>.json`. Confirmed discrepancies go to `source_mismatches/<image-stem>.json`. Missing/extra records include source counts and mappings; **Other** uses a minimal issue document with a note and box coordinates. Internal `.state/` files retain verified content and consistency metadata for reopening and export.
+Verified source content and configured metadata saved from the Content stage.
 
-**Download All** creates `<output-dir>/annotations.zip` with the applicable documents:
+<details>
+<summary><code>inscription_content.json</code> — Example</summary>
 
-| Archive member | Contents |
+```json
+[
+  {
+    "image": "12305.jpg",
+    "inscription_code": "12305",
+    "content": {
+      "Tên bia": "Example inscription",
+      "Địa điểm": "Example location",
+      "Niên đại": "1700",
+      "Nguyên văn chữ Hán Nôm": "永",
+      "Phiên âm Hán Việt": "Vĩnh",
+      "Toát yếu": null
+    }
+  },
+  {
+    "image": "12306.jpg",
+    "inscription_code": "12306",
+    "content": {
+      "Tên bia": "Example inscription",
+      "Địa điểm": "Example location",
+      "Niên đại": "1700",
+      "Nguyên văn chữ Hán Nôm": "樂",
+      "Phiên âm Hán Việt": "Lạc",
+      "Toát yếu": null
+    }
+  }
+]
+```
+
+</details>
+
+| Field | Meaning |
 | --- | --- |
-| `text_annotations.json` | Array of normal saved annotations |
-| `inscription_content.json` | Array of verified per-image content documents |
-| `source_mismatches.json` | Array of confirmed discrepancy records |
+| `image` | Image filename; identifies the face within the dataset. |
+| `inscription_code` | Face identifier matching the image stem. |
+| `content` | Configured section labels mapped to verified text or `null` when unavailable; punctuation and line breaks are preserved. |
+| `content` keys | With the default configuration: `Tên bia` (title), `Địa điểm` (location), `Niên đại` (date), `Nguyên văn chữ Hán Nôm` (original text), `Phiên âm Hán Việt` (transcription), `Toát yếu` (summary). Metadata keys are omitted when disabled. |
 
-All three files are included; empty categories contain `[]`. Suspicious is saved directly on each bounding box and does not create a source mismatch or a separate file. Reordering character cards keeps the flag on its box; reopening an annotation restores it from the saved JSON. Missing/extra records retain the flag on their annotated boxes. Annotation files must contain the current flags; the former suspicious sidecar format is not migrated or loaded. The standalone detection CLI returns `image`, `bounding_boxes`, and a separate `reading_order` list; this is an intermediate result, not a completed annotation document.
+### `source_mismatches.json`
 
-## Architecture
+Images saved with missing source text (`missing_text`), extra source text (`extra_text`), or another source mismatch (`other`). Fields depend on the mismatch type.
 
-| Component | Responsibility |
+<details>
+<summary><code>source_mismatches.json</code> — Example</summary>
+
+```json
+[
+  {
+    "image": "12307.jpg",
+    "inscription_code": "12307",
+    "source_text": "永",
+    "source_character_count": 1,
+    "bounding_box_count": 2,
+    "issue_type": ["missing_text"],
+    "note": "The image has two characters, but the source contains only one.",
+    "bounding_boxes": {
+      "1": {
+        "bbox": [100, 100, 150, 150],
+        "status": "intact",
+        "damage_level": null,
+        "unknown": false,
+        "unavailable_font": false,
+        "expert_prediction": false,
+        "suspicious": false
+      },
+      "2": {
+        "bbox": [100, 160, 150, 210],
+        "status": "intact",
+        "damage_level": null,
+        "unknown": false,
+        "unavailable_font": false,
+        "expert_prediction": false,
+        "suspicious": false
+      }
+    },
+    "annotations": {"1": "永", "2": "MISS"},
+    "image_resize": {
+      "source_size": [1000, 1000],
+      "output_size": [1000, 1000],
+      "scale_x": 1.0,
+      "scale_y": 1.0
+    },
+    "crop": {
+      "top_left": [0, 0],
+      "top_right": [1000, 0],
+      "bottom_right": [1000, 1000],
+      "bottom_left": [0, 1000]
+    }
+  },
+  {
+    "image": "12308.jpg",
+    "inscription_code": "12308",
+    "source_text": "永樂",
+    "source_character_count": 2,
+    "bounding_box_count": 1,
+    "issue_type": ["extra_text"],
+    "note": "The source character 樂 has no corresponding box.",
+    "bounding_boxes": {
+      "1": {
+        "bbox": [100, 100, 150, 150],
+        "status": "intact",
+        "damage_level": null,
+        "unknown": false,
+        "unavailable_font": false,
+        "expert_prediction": false,
+        "suspicious": false
+      }
+    },
+    "annotations": {"1": "永"},
+    "text_sequence": ["永", "樂"],
+    "excluded_characters": ["樂"],
+    "image_resize": {
+      "source_size": [1000, 1000],
+      "output_size": [1000, 1000],
+      "scale_x": 1.0,
+      "scale_y": 1.0
+    },
+    "crop": {
+      "top_left": [0, 0],
+      "top_right": [1000, 0],
+      "bottom_right": [1000, 1000],
+      "bottom_left": [0, 1000]
+    }
+  },
+  {
+    "image": "12309.jpg",
+    "inscription_code": "12309",
+    "issue_type": ["other"],
+    "note": "The image does not match the source; review is required.",
+    "bounding_boxes": {
+      "1": {
+        "bbox": [100, 100, 150, 150]
+      }
+    }
+  }
+]
+```
+
+</details>
+
+| Field | Meaning |
 | --- | --- |
-| `text_extraction` | Discover fonts, match embedded glyph outlines to Unicode, decode PDF lines, and parse configured record boundaries and sections |
-| `text_detection` | Invert images, run OCR localization and DINO inference, fuse boxes, and propose reading order |
-| `gradio/annotation` | Maintain verification state, validate geometry and alignment, track discrepancies, and atomically persist JSON |
-| `gradio/ui` | Synchronize interactive SVG editing and character cards with Python workflow state |
-| `gradio/crop` | Validate crop rectangles and compute export resize geometry |
+| `image` | Image filename; identifies the face within the dataset. |
+| `inscription_code` | Face identifier matching the image stem. |
+| `issue_type` | Single-item array: `missing_text`, `extra_text`, or `other`. |
+| `note` | Reviewer explanation; required and nonempty for `other`. |
+| `source_text` | Source text used for alignment; present for missing/extra text. |
+| `source_character_count`, `bounding_box_count` | Normalized source character count and number of boxes; present for missing/extra text. |
+| `bounding_boxes` | Same box fields as normal annotations for missing/extra text; only `bbox` for `other`. |
+| `annotations` | Assignments for missing/extra text; `MISS` marks boxes without source characters. Absent for `other`. |
+| `text_sequence`, `excluded_characters` | Extra-text records only: full reordered sequence and its trailing characters excluded from box assignment. |
+| `image_resize`, `crop` | Same geometry as normal annotations for missing/extra text; absent for `other`. |
 
-Glyph profiles use exact outline signatures when available and rasterized nearest-reference matching otherwise. Accuracy depends on suitable reference fonts. Reading order is heuristic and requires review, particularly for irregular layouts.
+When combining downloads, merge arrays from files with the same name and keep the latest record per `image`. An image should appear in either normal annotations or source mismatches according to its latest saved state; merge content independently.
 
-Fusion retains a larger OCR box as `damaged` when a smaller damage box is contained with at least 80% smaller-box coverage and IoU below 0.5, reducing duplicate character boxes.
+## PDF-to-JSON Extraction
 
-## Detection models
+PDF extraction is an optional preprocessing stage that generates source JSON from inscription PDFs. Run it separately when source JSON is not already available; it does not launch Gradio.
 
-Supply these external assets; checkpoints and executables are excluded from version control:
+Provide the PDF and matching reference fonts, then edit the appropriate volume config (for example, `configs/tap_1.json`):
 
-```text
-text_detection/models/
-├── ckpts/
-│   ├── damage_detect.py       # DINO / MMDetection configuration
-│   └── damage_detect.pth      # Matching checkpoint
-└── dists/det_model/det_model  # Packaged OCR detector executable
-```
+| Config field | Purpose |
+| --- | --- |
+| `input_pdf_path` | Source PDF path. |
+| `paths.glyph_profile` | Glyph profile to generate and reuse. |
+| `paths.output_json` | Extracted record destination. |
+| `encoded_fonts` | Reference fonts used to decode embedded glyphs. |
+| `page_filter`, `records` | Margins, footnotes, record boundaries, metadata, and content headings. |
 
-The configuration/checkpoint must match, and the executable must be compatible with the host. On Linux:
-
-```bash
-chmod +x text_detection/models/dists/det_model/det_model
-python -m text_detection /path/to/image.jpg --output output/detection.json
-```
-
-Both entry points accept `--vague-det-config`, `--vague-det-weights`, and `--ocr-det-executable` for alternative asset paths. DINO selects CUDA when PyTorch reports it available, otherwise CPU; this does not establish CPU compatibility for the external executable or pinned installation.
-
-## Development
-
-### Inscription years and decade chart
-
-Extract explicit Gregorian years from `nien_dai` in every JSON file in
-`merged_records`, then count inscriptions in bins such as 1600–1609 and
-1610–1619:
+Config paths resolve relative to the config file. Install extraction dependencies if not already available:
 
 ```bash
-uv pip install --python .venv/bin/python 'matplotlib>=3.8'
-.venv/bin/python scripts/chart_inscription_decades.py
+python -m pip install fonttools==4.65.0 pymupdf==1.28.2 numpy==1.26.4
+python -m text_extraction.glyph_profile --config configs/tap_1.json
+python -m text_extraction.main --config configs/tap_1.json
 ```
 
-Results are written to `outputs/inscription_decades/`: PNG and SVG bar charts,
-`inscription_years.csv` (one row per inscription), `decade_counts.csv`,
-`records_needing_review.csv`, and `summary.json`. CSV files use UTF-8 with BOM
-for compatibility with Excel. Each JSON record counts once, regardless of how
-many faces it contains. Empty decades between the minimum and maximum year
-are included with count zero.
+Records are written to `paths.output_json`; structural review items go to `<output-stem>_invalid.json`. Pass the resulting source JSON to Gradio with `--source-json`.
 
-When multiple years occur, the default selects the earliest; use
-`--multiple-years latest` or `--multiple-years exclude` to change this policy.
-Missing Gregorian years are excluded and reported for review. The script does
-not infer a year from a reign name or search inscription body text. Input and
-output locations can be changed with `--input-dir` and `--output-dir`.
+## References and Acknowledgments
 
-The repository uses `unittest` for extraction, detection adapters, annotation validation, exports, and Gradio callbacks. With extraction and manual annotation dependencies installed:
+[AutoHDR — Reviving Cultural Heritage: A Novel Approach for Comprehensive Historical Document Restoration](https://github.com/SCUT-DLVCLab/AutoHDR) supplies the upstream character-localization and damage-detection models and reading-order heuristic reused here. Vietnamica Alignment integrates these components with its PDF extraction, manual verification workflow, and annotation exports.
 
-```bash
-python -m unittest discover -s tests
-python -m unittest discover -s gradio/tests
-```
+## Development Notes
 
-Detection tests include mocked model outputs and adapters. Passing them does not validate real checkpoint inference or the packaged executable.
-
-## Acknowledgements
-
-Character localization, DINO damaged-character detection, and the reading-order heuristic are based on [AutoHDR](https://github.com/SCUT-DLVCLab/AutoHDR). Consult the upstream project for the original models and approach. This repository integrates those stages with PDF extraction and human verification, including the additional containment rule described above.
-
-## License
-
-No repository-level license file is currently included. Review applicable permissions for the code, bundled fonts, source documents, and external model assets before reuse or redistribution.
-
-### Extract missing inscription images
-
-Use the IDs in a copy report to extract complete faces from the four configured
-PDF volumes. The helper decodes PDF headings and `Kí hiệu` using existing glyph
-profiles, joins adjacent image strips, assigns images in PDF order to the full
-metadata ID list, then exports only missing faces.
-
-```bash
-.venv/bin/python helpers/extract_missing_images.py --dry-run
-.venv/bin/python helpers/extract_missing_images.py
-```
-
-Defaults: `helpers/copy_report.json`, `configs/`, and `data/extracted_images/`.
-Override with `--report`, `--config-dir`, or `--output-dir`. Output names use IDs
-padded to at least five digits (`07055.png`). Existing images are skipped unless
-`--overwrite` is supplied. Dry runs do not write files. Normal runs write
-`extraction_report.json` alongside images, including PDF pages and image regions.
-A count mismatch, duplicate ID, or uncertain match is reported as `needs_review`
-and is not exported. The command exits with status 1 if any IDs remain unresolved
-or a volume fails; successfully matched images still appear in the output.
-
-The helper also applies explicitly verified exceptions for faces 20324,
-22695–22697, 33651a/b, 45233–45234, 48889 and 42893. These assignments use
-confirmed PDF pages, excluding supplemental faces and end-of-volume noise.
-ID 20325 is assigned to inscription 103 at PDF page 507; the surplus ID in inscription 104 is excluded. ID 33651
-produces two files, `33651a.png` and `33651b.png`. Both outputs appear under
-`outputs` in its report entry. These exceptions are scoped to the bundled
-volume names and inscription numbers in `VERIFIED_FACES`.
-
-### Damage levels and session commits
-
-- **1 — Light:** Characters maintain most structural features, enabling reliable identification despite visible damage.
-- **2 — Medium:** Characters show significant structural damage but remain identifiable through careful examination.
-- **3 — Severe:** Characters exhibit complete loss of structural integrity, rendering them illegible even to expert examination.
-
-Selecting a level edits the browser draft. **Apply Changes** commits the full Status & Order draft (status, damage level, flags, and character order) to the Python session without leaving the step or writing JSON. Incomplete levels can be committed. **Next** also commits the latest draft, then requires a level for every damaged box. Switching to intact clears the level. Existing flags and placeholders do not imply a level.
-
-**Save image** writes the final JSON; **Save all** exports saved files. Legacy JSON without `damage_level` remains readable and exportable unchanged; reopening it for editing requires classifying damaged boxes before confirming Status & Order. Failed Apply Changes commits preserve the browser draft.
+> [!NOTE]
+> Parts of the Gradio interface were developed with AI-assisted coding tools. The current implementation prioritizes annotation functionality and has not undergone a comprehensive architectural refactoring. Review the code and tests before adapting it for production use.
