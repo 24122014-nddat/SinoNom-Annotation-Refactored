@@ -319,6 +319,30 @@ Both entry points accept `--vague-det-config`, `--vague-det-weights`, and `--ocr
 
 ## Development
 
+### Inscription years and decade chart
+
+Extract explicit Gregorian years from `nien_dai` in every JSON file in
+`merged_records`, then count inscriptions in bins such as 1600–1609 and
+1610–1619:
+
+```bash
+uv pip install --python .venv/bin/python 'matplotlib>=3.8'
+.venv/bin/python scripts/chart_inscription_decades.py
+```
+
+Results are written to `outputs/inscription_decades/`: PNG and SVG bar charts,
+`inscription_years.csv` (one row per inscription), `decade_counts.csv`,
+`records_needing_review.csv`, and `summary.json`. CSV files use UTF-8 with BOM
+for compatibility with Excel. Each JSON record counts once, regardless of how
+many faces it contains. Empty decades between the minimum and maximum year
+are included with count zero.
+
+When multiple years occur, the default selects the earliest; use
+`--multiple-years latest` or `--multiple-years exclude` to change this policy.
+Missing Gregorian years are excluded and reported for review. The script does
+not infer a year from a reign name or search inscription body text. Input and
+output locations can be changed with `--input-dir` and `--output-dir`.
+
 The repository uses `unittest` for extraction, detection adapters, annotation validation, exports, and Gradio callbacks. With extraction and manual annotation dependencies installed:
 
 ```bash

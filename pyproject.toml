@@ -10,6 +10,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+analysis = ["matplotlib>=3.8"]
 # The AutoHDR adapter remains optional: PDF extraction and JSON post-processing
 # never import this ML stack. MMDetection is installed separately because the
 # correct MMCV build depends on the external DINO config, Torch, and accelerator.
