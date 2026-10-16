@@ -304,15 +304,20 @@ const syncExternalControls = () => {
     const unknownRadioInputs = root.querySelectorAll('#unknown-radio input');
     const unknownContainer = root.querySelector('#unknown-radio');
     const isDamaged = active.status === 'damaged';
-    for (const selector of ['#damage-level-radio', '#damage-level-help']) {
-      const container = root.querySelector(selector);
-      if (container) container.style.display = isDamaged ? '' : 'none';
-    }
     root.querySelectorAll('#damage-level-radio input').forEach(input => {
       const target = String(active.damage_level ?? 'Unselected');
+      // Temporarily enable the current value while synchronizing Gradio's state.
       if (input.value === target && !input.checked) {
+        input.disabled = false;
         syncingStatusControl = true;
         try { input.click(); } finally { syncingStatusControl = false; }
+      }
+      const allowed = isDamaged ? input.value !== 'Unselected' : input.value === 'Unselected';
+      input.disabled = !allowed;
+      const label = input.closest('label');
+      if (label) {
+        label.classList.toggle('disabled', !allowed);
+        label.style.pointerEvents = allowed ? 'auto' : 'none';
       }
     });
     const canBeUnknown = isDamaged && !isMissing;
@@ -704,10 +709,10 @@ root.addEventListener('change', event => {
   const levelInput = event.target.closest('#damage-level-radio input');
   if (levelInput && props.value.step === 4 && activeBoxId) {
     const box = localBoxes[activeBoxId];
-    if (box?.status === 'damaged') {
-      box.damage_level = levelInput.value === 'Unselected' ? null : Number(levelInput.value);
-      syncExternalControls();
+    if (box?.status === 'damaged' && ['1', '2', '3'].includes(levelInput.value)) {
+      box.damage_level = Number(levelInput.value);
     }
+    syncExternalControls();
     return;
   }
   const input = event.target.closest('#status-radio input');

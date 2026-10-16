@@ -438,7 +438,6 @@ def create_app(options):
                     status_id=gr.Dropdown(visible=False)
                     status=gr.Radio(['intact','damaged'],value='intact',label='Selected box status',elem_id='status-radio')
                     damage_level=gr.Radio(['Unselected','1','2','3'],value='Unselected',label='Damage level',interactive=True,elem_id='damage-level-radio')
-                    gr.Markdown('1 — Light: most structure remains; reliably identifiable. 2 — Medium: significant damage; identifiable through careful examination. 3 — Severe: structural integrity lost; illegible even to experts.',elem_id='damage-level-help')
                     unknown_status=gr.Radio(['False','True'],value='False',label='Unknown character (Damaged only)',interactive=True,elem_id='unknown-radio')
                     unavailable_font_status=gr.Radio(['False','True'],value='False',label='Unavailable Font',interactive=True,elem_id='unavailable-font-radio')
                     expert_prediction_status=gr.Radio(['False','True'],value='False',label='Expert Prediction',interactive=True,elem_id='expert-prediction-radio')
