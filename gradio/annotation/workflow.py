@@ -565,11 +565,11 @@ class Workflow:
             if step not in (4, 5):
                 raise ValueError('Edit status in the Status & Order step.')
             box_id = str(payload.get('id') or s['selected_box_id'])
-            update_status(s, s['region_uid_by_box_id'].get(box_id), payload['status'], payload.get('unknown'), payload.get('unavailable_font'), payload.get('expert_prediction'), payload.get('suspicious'))
+            update_status(s, s['region_uid_by_box_id'].get(box_id), payload['status'], payload.get('unknown'), payload.get('unavailable_font'), payload.get('expert_prediction'), payload.get('suspicious'), **({'damage_level': payload['damage_level']} if 'damage_level' in payload else {}))
         elif action == 'statuses':
             if step not in (4, 5):
                 raise ValueError('Edit statuses in the Status & Order step.')
-            replace_statuses(s, payload.get('statuses'), payload.get('unknowns'), payload.get('unavailable_fonts'), payload.get('expert_predictions'), payload.get('suspiciouses'))
+            replace_statuses(s, payload.get('statuses'), payload.get('unknowns'), payload.get('unavailable_fonts'), payload.get('expert_predictions'), payload.get('suspiciouses'), payload.get('damage_levels'))
         elif action == 'reorder_text':
             if step != 4:
                 raise ValueError('Edit character assignment in Step 4.')

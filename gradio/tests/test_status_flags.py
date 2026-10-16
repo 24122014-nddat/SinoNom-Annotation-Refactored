@@ -79,7 +79,7 @@ class StatusFlags(unittest.TestCase):
                 (False,False,True,('#ef4444','#ffffff'))):
                 s=self.state();uid=s['region_uid_by_box_id']['1']
                 s['regions'][uid].update(status='damaged' if unknown else 'intact',
-                    unknown=unknown,unavailable_font=font,expert_prediction=expert)
+                    unknown=unknown,unavailable_font=font,expert_prediction=expert,damage_level=3 if unknown else None)
                 confirm_status(s)
                 group,ns=self.overlay(s,step)
                 rect=group.find('svg:rect',ns)
@@ -100,7 +100,7 @@ class StatusFlags(unittest.TestCase):
                  loaded_crop_scaled=[2,1,48,24], resized_image_size=[50,25])
         for font,expert,unknown in ((True,False,False),(True,True,False),(False,False,True)):
             s['regions'][uid].update(status='damaged',unknown=unknown,
-                unavailable_font=font,expert_prediction=expert)
+                unavailable_font=font,expert_prediction=expert,damage_level=2)
             confirm_status(s)
             group,ns=self.overlay(s,7)
             rect=group.find('svg:rect',ns)

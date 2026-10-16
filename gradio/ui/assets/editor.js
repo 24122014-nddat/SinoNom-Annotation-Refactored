@@ -118,6 +118,7 @@ const cloneBoxes = boxes => Object.fromEntries(Object.entries(boxes || {}).map((
   copy.unavailable_font = Boolean(box.unavailable_font);
   copy.expert_prediction = Boolean(box.expert_prediction);
   copy.suspicious = Boolean(box.suspicious);
+  copy.damage_level = box.status === 'damaged' ? (box.damage_level ?? null) : null;
   copy.order = box.order ?? null;
   return [String(id), copy];
 }));
@@ -201,6 +202,7 @@ const syncExternalControls = () => {
     statuses: Object.fromEntries(Object.entries(localBoxes).map(
       ([id, box]) => [id, box.status]
     )),
+    damage_levels: Object.fromEntries(Object.entries(localBoxes).map(([id, box]) => [id, box.damage_level ?? null])),
     unknowns: Object.fromEntries(Object.entries(localBoxes).map(
       ([id, box]) => [id, Boolean(box.status === 'damaged' && box.unknown)]
     )),
@@ -302,6 +304,17 @@ const syncExternalControls = () => {
     const unknownRadioInputs = root.querySelectorAll('#unknown-radio input');
     const unknownContainer = root.querySelector('#unknown-radio');
     const isDamaged = active.status === 'damaged';
+    for (const selector of ['#damage-level-radio', '#damage-level-help']) {
+      const container = root.querySelector(selector);
+      if (container) container.style.display = isDamaged ? '' : 'none';
+    }
+    root.querySelectorAll('#damage-level-radio input').forEach(input => {
+      const target = String(active.damage_level ?? 'Unselected');
+      if (input.value === target && !input.checked) {
+        syncingStatusControl = true;
+        try { input.click(); } finally { syncingStatusControl = false; }
+      }
+    });
     const canBeUnknown = isDamaged && !isMissing;
     const targetValue = canBeUnknown && active.unknown ? 'True' : 'False';
     if (unknownContainer) {
@@ -332,6 +345,7 @@ const renderLocalStatus = (id, status, unknown = null) => {
   const box = localBoxes[id];
   const group = groupFor(id);
   if (!box || !group) return;
+  if (status !== 'damaged' || box.status !== 'damaged') box.damage_level = null;
   box.status = status;
   if (unknown !== null) {
     box.unknown = Boolean(unknown && status === 'damaged');
@@ -687,6 +701,15 @@ root.addEventListener('change', event => {
     renderSelection();
     return;
   }
+  const levelInput = event.target.closest('#damage-level-radio input');
+  if (levelInput && props.value.step === 4 && activeBoxId) {
+    const box = localBoxes[activeBoxId];
+    if (box?.status === 'damaged') {
+      box.damage_level = levelInput.value === 'Unselected' ? null : Number(levelInput.value);
+      syncExternalControls();
+    }
+    return;
+  }
   const input = event.target.closest('#status-radio input');
   if (input && props.value.step === 4 && activeBoxId) {
     const currentBox = localBoxes[activeBoxId];
@@ -922,8 +945,7 @@ const updateExcludedChips = container => {
   updateCanvasLabels();
 };
 
-// Apply Changes only refreshes the browser preview. Next remains responsible
-// for committing the current text/status draft to the Python session.
+// Apply Changes and Next both commit the browser draft to the Python session.
 element.addEventListener('apply-status-preview', () => {
   if (props.value.step !== 4) return;
   const container = element.querySelector('.order-chips');
@@ -1301,7 +1323,7 @@ element.addEventListener('pointerup', event => {
       const bbox = state.result;
       let newId;
       do { newId = `box_new_${nextTemporaryBoxId++}`; } while (localBoxes[newId]);
-      localBoxes[newId] = { bbox: [...bbox], status: 'intact', unknown: false, unavailable_font: false, expert_prediction: false, suspicious: false, order: null };
+      localBoxes[newId] = { bbox: [...bbox], status: 'intact', damage_level: null, unknown: false, unavailable_font: false, expert_prediction: false, suspicious: false, order: null };
       clearAllBoxOrders();
       mismatchConfirmationInvalidated = true;
       clearMismatchIssueSelection();

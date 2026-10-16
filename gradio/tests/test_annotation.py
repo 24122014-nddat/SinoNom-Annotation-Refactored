@@ -72,7 +72,7 @@ class Invariants(unittest.TestCase):
 
     def test_region_identity_is_internal_and_public_ids_are_rebuilt(self):
         s=aligned_state();uids=list(s['regions'])
-        update_status(s,uids[0],'damaged')
+        update_status(s,uids[0],'damaged',damage_level=2)
         delete_bbox(s,uids[1])
         self.assertEqual(len(s['regions']),2)
         self.assertEqual(s['bounding_boxes'],{});self.assertEqual(s['reading_order'],[])
@@ -359,7 +359,7 @@ class Invariants(unittest.TestCase):
         s=aligned_state()
         uid=list(s['regions'])[1]
         box_id=s['box_id_by_region'][uid]
-        s['regions'][uid]['status']='damaged'
+        s['regions'][uid].update(status='damaged',damage_level=2)
         s['bounding_boxes'][box_id]['status']='intact'
         confirm_status(s)
         self.assertEqual(s['bounding_boxes'][box_id]['status'],'damaged')

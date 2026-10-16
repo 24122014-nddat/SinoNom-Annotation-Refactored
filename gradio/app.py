@@ -437,6 +437,8 @@ def create_app(options):
                         value=False,label='Show image only',elem_id='show-image-only')
                     status_id=gr.Dropdown(visible=False)
                     status=gr.Radio(['intact','damaged'],value='intact',label='Selected box status',elem_id='status-radio')
+                    damage_level=gr.Radio(['Unselected','1','2','3'],value='Unselected',label='Damage level',interactive=True,elem_id='damage-level-radio')
+                    gr.Markdown('1 — Light: most structure remains; reliably identifiable. 2 — Medium: significant damage; identifiable through careful examination. 3 — Severe: structural integrity lost; illegible even to experts.',elem_id='damage-level-help')
                     unknown_status=gr.Radio(['False','True'],value='False',label='Unknown character (Damaged only)',interactive=True,elem_id='unknown-radio')
                     unavailable_font_status=gr.Radio(['False','True'],value='False',label='Unavailable Font',interactive=True,elem_id='unavailable-font-radio')
                     expert_prediction_status=gr.Radio(['False','True'],value='False',label='Expert Prediction',interactive=True,elem_id='expert-prediction-radio')
@@ -839,14 +841,7 @@ def create_app(options):
                     return render(ctx, WARNING+' '+html.escape(str(exc)))
             if ctx['active']['current_step'] == 4:
                 try:
-                    ctx = commit_statuses(ctx, selection, status_value)
-                    text_sequence,token_order = frontend_text_sequence(selection)
-                    if text_sequence is not None and (text_sequence or ctx['active']['annotations']):
-                        updated = engine.apply(ctx['active'], 'reorder_text', {
-                            'sequence': text_sequence,
-                            'token_order': token_order,
-                        })
-                        ctx = dict(ctx, active=updated)
+                    ctx = commit_status_order(ctx, selection, status_value)
                 except Exception as exc:
                     return render(ctx, WARNING+' '+html.escape(str(exc)))
             if ctx['active']['current_step'] == 6:
@@ -1027,7 +1022,13 @@ def create_app(options):
                 flags = [parsed.get(key, {}) for key in ('unavailable_fonts', 'expert_predictions', 'suspiciouses')]
                 if any(not isinstance(values, dict) or any(not isinstance(k, str) or not isinstance(v, bool) for k, v in values.items()) for values in flags):
                     raise ValueError
-                return statuses, unknowns, *flags
+                levels = parsed.get('damage_levels', {})
+                if not isinstance(levels, dict):
+                    raise ValueError
+                from annotation.status import validate_damage_level
+                for level in levels.values():
+                    validate_damage_level({'status': 'damaged', 'damage_level': level})
+                return statuses, unknowns, *flags, levels
             except (ValueError,TypeError,AttributeError):
                 raise gr.Error('The local status selection is invalid.')
         def commit_statuses(ctx,selection,status_value='intact'):
@@ -1039,7 +1040,8 @@ def create_app(options):
                 uid: bool(box.get('unknown', False))
                 for uid,box in ctx['active']['regions'].items()
             }
-            frontend, frontend_unknowns, frontend_fonts, frontend_experts, frontend_suspicious = frontend_statuses(selection)
+            frontend, frontend_unknowns, frontend_fonts, frontend_experts, frontend_suspicious, frontend_levels = frontend_statuses(selection)
+            levels_map={uid: box.get('damage_level') for uid,box in ctx['active']['regions'].items()}
             fonts_map={uid: box['unavailable_font'] for uid,box in ctx['active']['regions'].items()}
             suspicious_map={uid: box['suspicious'] for uid,box in ctx['active']['regions'].items()}
             experts_map={uid: box['expert_prediction'] for uid,box in ctx['active']['regions'].items()}
@@ -1048,6 +1050,7 @@ def create_app(options):
                             (str(box_id) if str(box_id) in ctx['active']['regions'] else None))
                 if region_uid and region_uid in statuses:
                     statuses[region_uid]=status_name
+                    levels_map[region_uid]=frontend_levels.get(box_id, levels_map[region_uid])
                     suspicious_map[region_uid]=frontend_suspicious.get(box_id, suspicious_map[region_uid])
                     fonts_map[region_uid]=frontend_fonts.get(box_id, fonts_map[region_uid])
                     experts_map[region_uid]=frontend_experts.get(box_id, experts_map[region_uid])
@@ -1059,14 +1062,30 @@ def create_app(options):
                             (str(active) if str(active) in ctx['active']['regions'] else None))
                 if region_uid and region_uid in statuses:
                     statuses[region_uid]=status_value
-            updated=engine.apply(ctx['active'],'statuses',{'statuses':statuses, 'unknowns':unknowns_map, 'unavailable_fonts':fonts_map, 'expert_predictions':experts_map, 'suspiciouses':suspicious_map})
+            updated=engine.apply(ctx['active'],'statuses',{'statuses':statuses, 'unknowns':unknowns_map, 'unavailable_fonts':fonts_map, 'expert_predictions':experts_map, 'suspiciouses':suspicious_map, 'damage_levels':levels_map})
             return dict(ctx,active=updated)
-        apply_changes.click(
-            fn=None,inputs=[],outputs=None,show_progress='hidden',
-            js="""() => {
-                document.querySelector('.workbench-board')?.dispatchEvent(
-                    new CustomEvent('apply-status-preview', {bubbles: true}));
-            }""")
+        def commit_status_order(ctx, selection, status_value='intact'):
+            candidate = commit_statuses(ctx, selection, status_value)
+            text_sequence, token_order = frontend_text_sequence(selection)
+            if text_sequence is not None and (text_sequence or candidate['active']['annotations']):
+                updated = engine.apply(candidate['active'], 'reorder_text', {
+                    'sequence': text_sequence, 'token_order': token_order,
+                })
+                candidate = dict(candidate, active=updated)
+            return candidate
+
+        def apply_status_changes(ctx, selection, status_value):
+            try:
+                return render(commit_status_order(ctx, selection, status_value))
+            except Exception as exc:
+                result = render(ctx, WARNING+' '+html.escape(str(exc)))
+                # Preserve the browser draft when validation rejects the commit.
+                result[8] = gr.skip()
+                return result
+
+        clear_loading_when_done(apply_changes.click(
+            apply_status_changes, [session, selection_bridge, status],
+            **dict(event_args, js=snapshot_board_state_js(1))))
         def update_coordinates(ctx,selection,a,b,d,e):
             active,_=frontend_selection(selection)
             if not active:raise gr.Error('Select a bounding box first.')

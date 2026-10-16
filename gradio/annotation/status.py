@@ -3,10 +3,23 @@ from .text_alignment import MISSING_ANNOTATION
 
 
 EDITABLE_STATUSES = ('intact', 'damaged')
+_UNSET = object()
+STATUS_FIELDS = ('status', 'damage_level', 'unknown', 'unavailable_font', 'expert_prediction', 'suspicious')
+
+
+def validate_damage_level(box):
+    level = box.get('damage_level')
+    if level is not None and (type(level) is not int or level not in (1, 2, 3)):
+        raise ValueError('Damage level must be 1, 2, 3 or null.')
+    if box['status'] != 'damaged' and level is not None:
+        raise ValueError('Intact boxes cannot have a damage level.')
+
+
 FLAGS = ('unknown', 'unavailable_font', 'expert_prediction', 'suspicious')
 
 
 def validate_flags(box):
+    validate_damage_level(box)
     for flag in FLAGS:
         if flag not in box or not isinstance(box[flag], bool):
             raise ValueError(f'{flag} must be a boolean.')
@@ -15,6 +28,10 @@ def validate_flags(box):
 
 
 def normalize_flags(box, missing=False):
+    validate_damage_level(dict(box, status='damaged'))
+    box.setdefault('damage_level', None)
+    if box['status'] != 'damaged':
+        box['damage_level'] = None
     if missing:
         for flag in FLAGS:
             box[flag] = False
@@ -39,10 +56,10 @@ def synchronize_missing_statuses(state):
         character = state.get('annotations', {}).get(str(box_id))
         apply_character_flags(box, character)
         normalize_flags(box, character == MISSING_ANNOTATION)
-        state['bounding_boxes'][box_id].update({key: box[key] for key in ('status', *FLAGS)})
+        state['bounding_boxes'][box_id].update({key: box[key] for key in STATUS_FIELDS})
 
 
-def update_status(state, region_uid, status, unknown=None, unavailable_font=None, expert_prediction=None, suspicious=None, *, default_expert_damage=True):
+def update_status(state, region_uid, status, unknown=None, unavailable_font=None, expert_prediction=None, suspicious=None, *, damage_level=_UNSET, default_expert_damage=True):
     if region_uid not in state['regions'] or status not in EDITABLE_STATUSES:
         raise ValueError('Invalid region or status.')
     old = state['regions'][region_uid]
@@ -59,7 +76,11 @@ def update_status(state, region_uid, status, unknown=None, unavailable_font=None
         unknown = False
     if default_expert_damage and expert_prediction and not old['expert_prediction']:
         status = 'damaged'
-    box = dict(old, status=status, unknown=unknown if status == 'damaged' else False,
+    level = old.get('damage_level') if damage_level is _UNSET else damage_level
+    validate_damage_level({'status': 'damaged', 'damage_level': level})
+    if status != 'damaged' or old['status'] != 'damaged' and damage_level is _UNSET:
+        level = None
+    box = dict(old, status=status, damage_level=level, unknown=unknown if status == 'damaged' else False,
                unavailable_font=unavailable_font, expert_prediction=expert_prediction, suspicious=suspicious)
     box_id = state['box_id_by_region'].get(region_uid)
     character = state.get('annotations', {}).get(str(box_id))
@@ -67,14 +88,19 @@ def update_status(state, region_uid, status, unknown=None, unavailable_font=None
     normalize_flags(box, character == MISSING_ANNOTATION)
     state['regions'][region_uid] = box
     if box_id in state['bounding_boxes']:
-        state['bounding_boxes'][box_id].update({key: box[key] for key in ('status', *FLAGS)})
+        state['bounding_boxes'][box_id].update({key: box[key] for key in STATUS_FIELDS})
     state['saved'] = False
 
 
-def replace_statuses(state, statuses, unknowns=None, unavailable_fonts=None, expert_predictions=None, suspiciouses=None):
+def replace_statuses(state, statuses, unknowns=None, unavailable_fonts=None, expert_predictions=None, suspiciouses=None, damage_levels=None):
     """Validate the complete update before changing any region."""
     if not isinstance(statuses, dict) or set(statuses) != set(state['regions']):
         raise ValueError('Statuses must contain every region exactly once.')
+    if damage_levels is not None:
+        if not isinstance(damage_levels, dict) or set(damage_levels) != set(statuses):
+            raise ValueError('Damage levels must contain every region exactly once.')
+        for level in damage_levels.values():
+            validate_damage_level({'status': 'damaged', 'damage_level': level})
     maps = (unknowns, unavailable_fonts, expert_predictions, suspiciouses)
     for values in maps:
         if values is not None and (not isinstance(values, dict) or
@@ -85,7 +111,7 @@ def replace_statuses(state, statuses, unknowns=None, unavailable_fonts=None, exp
     for uid, status in statuses.items():
         values = [mapping.get(uid, candidate['regions'][uid][flag]) if mapping is not None
                   else candidate['regions'][uid][flag] for flag, mapping in zip(FLAGS, maps)]
-        update_status(candidate, uid, status, *values, default_expert_damage=False)
+        update_status(candidate, uid, status, *values, damage_level=damage_levels[uid] if damage_levels is not None else _UNSET, default_expert_damage=False)
     state.update(candidate)
 
 
@@ -96,6 +122,10 @@ def confirm_status(state):
     for region_uid, box_id in state['box_id_by_region'].items():
         if state['regions'][region_uid]['status'] not in EDITABLE_STATUSES:
             raise ValueError('Every region must have a valid status.')
+    missing = [state['box_id_by_region'].get(uid, uid) for uid, box in state['regions'].items()
+               if box['status'] == 'damaged' and box.get('damage_level') is None]
+    if missing:
+        raise ValueError('Select a damage level for boxes: ' + ', '.join(missing))
     # Regions are the editable source of truth. Re-copy every known status at
     # the step boundary so Reading Order, Review, and export cannot retain a
     # stale bounding-box status after returning to this step.

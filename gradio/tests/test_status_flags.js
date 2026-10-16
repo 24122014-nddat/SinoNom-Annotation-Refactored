@@ -129,3 +129,13 @@ chip.dataset.character='@';
 run("renderLocalStatus('1','intact',true)");
 assert.equal(box.unknown,false);assert.equal(box.unavailable_font,true);
 assert.equal(chip.style.color,'#ec4899');
+
+run("radio('#status-radio input','damaged'); radio('#damage-level-radio input','2')");
+assert.equal(box.damage_level,2);
+run("radio('#status-radio input','intact')");
+assert.equal(box.damage_level,null);
+run("radio('#status-radio input','damaged')");
+assert.equal(box.damage_level,null);
+run("radio('#damage-level-radio input','3'); radio('#unknown-radio input','True')");
+assert.equal(box.damage_level,3);
+console.log('PASS: damage level draft changes, intact reset, and independent unknown flag');

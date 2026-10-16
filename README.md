@@ -151,7 +151,7 @@ Open the local URL printed in the terminal. The default host is `127.0.0.1`; Gra
 1. **Image:** select an image and click **Start Verification**.
 2. **Content:** correct the configured source sections. The original Hán/Nôm section supplies the character sequence.
 3. **Bounding Boxes & Sort:** run detection or draw/edit boxes manually. Sort all or selected boxes, or assign order numbers. Every box needs a unique order from `1` to `n` before continuing.
-4. **Status & Order:** review `intact`/`damaged` labels, flag unknown damaged characters, reorder character cards to match boxes, and mark suspicious content.
+4. **Status & Order:** review `intact`/`damaged` labels and damage levels (1 light, 2 medium, 3 severe), flag unknown damaged characters, reorder character cards to match boxes, and mark suspicious content.
 5. **Crop:** adjust the crop frame. Export metadata scales crops whose longest side exceeds 4096 pixels.
 6. **Review:** inspect the image and JSON, then click **Save Annotation**.
 
@@ -237,8 +237,8 @@ A normal saved annotation has this shape. This illustrative example uses an unsc
 {
   "image": "12305.jpg",
   "bounding_boxes": {
-    "1": {"bbox": [120, 350, 180, 420], "status": "intact", "unknown": false, "unavailable_font": false, "expert_prediction": false, "suspicious": true},
-    "2": {"bbox": [120, 450, 180, 520], "status": "damaged", "unknown": true, "unavailable_font": false, "expert_prediction": false, "suspicious": false}
+    "1": {"bbox": [120, 350, 180, 420], "status": "intact", "damage_level": null, "unknown": false, "unavailable_font": false, "expert_prediction": false, "suspicious": true},
+    "2": {"bbox": [120, 450, 180, 520], "status": "damaged", "damage_level": 3, "unknown": true, "unavailable_font": false, "expert_prediction": false, "suspicious": false}
   },
   "annotations": {"1": "永", "2": "樂"},
   "image_resize": {
@@ -260,6 +260,7 @@ A normal saved annotation has this shape. This illustrative example uses an unsc
 | --- | --- |
 | `bounding_boxes` | Contiguous string IDs `"1"` through `"n"`, ordered for character assignment |
 | `bbox` | `[x1, y1, x2, y2]` in original-image pixel coordinates |
+| `damage_level` | `1` light, `2` medium, `3` severe; `null` for intact or an unclassified draft |
 | `status` / `unknown` | Physical condition and an independent unknown flag for damaged characters |
 | `unavailable_font` / `expert_prediction` / `suspicious` | Required per-box boolean flags; suspicious can combine with font/expert flags but cannot combine with unknown |
 | `annotations` | One normalized character per box; `MISS` denotes missing source content in mismatch records |
@@ -388,3 +389,13 @@ ID 20325 is assigned to inscription 103 at PDF page 507; the surplus ID in inscr
 produces two files, `33651a.png` and `33651b.png`. Both outputs appear under
 `outputs` in its report entry. These exceptions are scoped to the bundled
 volume names and inscription numbers in `VERIFIED_FACES`.
+
+### Damage levels and session commits
+
+- **1 — Light:** Characters maintain most structural features, enabling reliable identification despite visible damage.
+- **2 — Medium:** Characters show significant structural damage but remain identifiable through careful examination.
+- **3 — Severe:** Characters exhibit complete loss of structural integrity, rendering them illegible even to expert examination.
+
+Selecting a level edits the browser draft. **Apply Changes** commits the full Status & Order draft (status, damage level, flags, and character order) to the Python session without leaving the step or writing JSON. Incomplete levels can be committed. **Next** also commits the latest draft, then requires a level for every damaged box. Switching to intact clears the level. Existing flags and placeholders do not imply a level.
+
+**Save image** writes the final JSON; **Save all** exports saved files. Legacy JSON without `damage_level` remains readable and exportable unchanged; reopening it for editing requires classifying damaged boxes before confirming Status & Order. Failed Apply Changes commits preserve the browser draft.

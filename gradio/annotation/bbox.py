@@ -26,7 +26,7 @@ def clear_box_orders(state):
 def add_bbox(state, bbox):
     coords = validate_coordinates(bbox, state['image_size'])
     uid = uuid4().hex
-    state['regions'][uid] = dict(bbox=coords, status='intact', unknown=False, unavailable_font=False, expert_prediction=False, suspicious=False)
+    state['regions'][uid] = dict(bbox=coords, status='intact', damage_level=None, unknown=False, unavailable_font=False, expert_prediction=False, suspicious=False)
     clear_box_orders(state)
     return uid
 
@@ -109,6 +109,9 @@ def sync_draft_boxes(state, payload, materialize_alignment=True):
         for uid, value in payload.get(field, {}).items():
             if uid in state['regions']:
                 state['regions'][uid][flag] = value
+    for uid, level in payload.get('damage_levels', {}).items():
+        if uid in state['regions']:
+            state['regions'][uid]['damage_level'] = level
     for uid, box in state['regions'].items():
         normalize_flags(box)
 
