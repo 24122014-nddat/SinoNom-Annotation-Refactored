@@ -1075,7 +1075,10 @@ def create_app(options):
 
         def apply_status_changes(ctx, selection, status_value):
             try:
-                return render(commit_status_order(ctx, selection, status_value))
+                from annotation.status import require_damage_levels
+                candidate = commit_status_order(ctx, selection, status_value)
+                require_damage_levels(candidate['active'])
+                return render(candidate)
             except Exception as exc:
                 result = render(ctx, WARNING+' '+html.escape(str(exc)))
                 # Preserve the browser draft when validation rejects the commit.

@@ -115,6 +115,16 @@ def replace_statuses(state, statuses, unknowns=None, unavailable_fonts=None, exp
     state.update(candidate)
 
 
+def require_damage_levels(state):
+    """Require every damaged box to have a valid classification before committing."""
+    for box in state['regions'].values():
+        validate_damage_level(box)
+    missing = [state['box_id_by_region'].get(uid, uid) for uid, box in state['regions'].items()
+               if box['status'] == 'damaged' and box.get('damage_level') is None]
+    if missing:
+        raise ValueError('Select a damage level for boxes: ' + ', '.join(missing))
+
+
 def confirm_status(state):
     if not (state['workflow']['bbox_valid'] or source_mismatch_confirmed(state)):
         raise ValueError('Bounding-box and character counts must match or have a confirmed source mismatch.')
@@ -122,10 +132,7 @@ def confirm_status(state):
     for region_uid, box_id in state['box_id_by_region'].items():
         if state['regions'][region_uid]['status'] not in EDITABLE_STATUSES:
             raise ValueError('Every region must have a valid status.')
-    missing = [state['box_id_by_region'].get(uid, uid) for uid, box in state['regions'].items()
-               if box['status'] == 'damaged' and box.get('damage_level') is None]
-    if missing:
-        raise ValueError('Select a damage level for boxes: ' + ', '.join(missing))
+    require_damage_levels(state)
     # Regions are the editable source of truth. Re-copy every known status at
     # the step boundary so Reading Order, Review, and export cannot retain a
     # stale bounding-box status after returning to this step.

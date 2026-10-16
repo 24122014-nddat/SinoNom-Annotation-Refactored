@@ -68,20 +68,18 @@ class DamageLevels(unittest.TestCase):
                        'unknowns': {'1': False, '2': False},
                        'textSequence': ['寺', '永']}
             result = apply(ctx, json.dumps(payload), 'intact')
+            self.assertEqual(result[0], ctx)
+            self.assertEqual(result[8], {'__type__': 'update'})
+            self.assertFalse((root / 'out' / '1.json').exists())
+            self.assertEqual(ctx['active']['bounding_boxes']['1']['status'], 'intact')
+            payload['damage_levels']['1'] = 2
+            result = apply(ctx, json.dumps(payload), 'intact')
             committed = result[0]['active']
             self.assertEqual(committed['current_step'], 4)
             self.assertEqual(committed['bounding_boxes']['1']['status'], 'damaged')
             self.assertEqual(committed['annotations'], {'1': '寺', '2': '永'})
+            self.assertEqual(committed['bounding_boxes']['1']['damage_level'], 2)
             self.assertFalse((root / 'out' / '1.json').exists())
-            self.assertEqual(ctx['active']['bounding_boxes']['1']['status'], 'intact')
-            advance = next(f.fn for f in app.fns.values()
-                           if f.fn and f.fn.__name__ == 'next_with_progress')
-            blocked = list(advance(result[0], selection=json.dumps(payload)))[-1]
-            self.assertEqual(blocked[0]['active']['current_step'], 4)
-            self.assertEqual(blocked[0]['active']['annotations'], {'1': '寺', '2': '永'})
-            payload['damage_levels']['1'] = 2
-            result = apply(result[0], json.dumps(payload), 'intact')
-            self.assertEqual(result[0]['active']['bounding_boxes']['1']['damage_level'], 2)
             before = deepcopy(result[0])
             payload['textSequence'] = ['永']
             failed = apply(result[0], json.dumps(payload), 'intact')
