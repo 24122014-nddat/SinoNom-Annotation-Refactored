@@ -8,7 +8,8 @@ let isDirty = false, pendingSortSelectedRange = null, pendingSortOverwrite = nul
 let image = props.value.image, localContext = '';
 let localBoxes = {}, selectedIds = new Set(), activeBoxId = null, activeTokenId = null;
 let localTextSequence = [], localTokenOrder = [];
-let alignmentStateReady = false, alignmentContainer = null;
+let alignmentStateReady = false, alignmentContainer = null, alignmentCanvas = null;
+let alignmentBoxGroups = [];
 let mismatchConfirmationInvalidated = false;
 let nextTemporaryBoxId = 1;
 let annotationColor = '#f4f4f5';
@@ -484,6 +485,7 @@ const hydrateLocalState = () => {
   const context = `${props.value.image || ''}:${props.value.step}`;
   alignmentStateReady = false;
   alignmentContainer = null;
+  alignmentCanvas = null;
   const preserveSelection = context === localContext;
   const preserveOrder = preserveSelection && ['select', 'suspicious'].includes(pendingAction);
   const previousBoxes = localBoxes;
@@ -906,28 +908,42 @@ const tokenOrderFromDOM = container => [...container.querySelectorAll('[data-ord
   .map(chip => chip.dataset.tokenId);
 const textSequenceFromDOM = container => [...container.querySelectorAll('[data-order-chip]')]
   .map(chip => chip.dataset.character);
-function initializeAlignmentStateFromDOM() {
-  const container = element.querySelector('.order-chips');
+function alignmentDOMIsReady(container) {
   if (!container || props.value.step !== 4) return false;
   const chips = [...container.querySelectorAll('[data-order-chip]')];
   const tokenIds = chips.map(chip => chip.dataset.tokenId || '');
   const expectedIds = (props.value.alignmentTokenIds || []).map(String);
-  const valid = tokenIds.length > 0
+  const groups = [...element.querySelectorAll('.annotation-canvas [data-box-id]')];
+  const boxIds = groups.map(group => group.dataset.boxId);
+  const expectedBoxes = (props.value.spatialBoxOrder || []).map(String);
+  return tokenIds.length > 0
     && tokenIds.every(Boolean)
     && new Set(tokenIds).size === tokenIds.length
     && expectedIds.length === tokenIds.length
     && new Set(expectedIds).size === expectedIds.length
-    && expectedIds.every(id => tokenIds.includes(id));
-  if (!valid) {
+    && expectedIds.every(id => tokenIds.includes(id))
+    && expectedBoxes.length > 0
+    && boxIds.length === expectedBoxes.length
+    && new Set(boxIds).size === boxIds.length
+    && groups.every(group => group.querySelector('rect:not([data-image-resize-handle])'))
+    && expectedBoxes.every(id => boxIds.includes(id) && localBoxes[id]);
+}
+function initializeAlignmentStateFromDOM() {
+  const container = element.querySelector('.order-chips');
+  if (!container || props.value.step !== 4) return false;
+  if (!alignmentDOMIsReady(container)) {
     container.dataset.alignmentReady = 'false';
     container.setAttribute('aria-busy', 'true');
     alignmentStateReady = false;
     alignmentContainer = null;
+    alignmentCanvas = null;
     return false;
   }
-  localTokenOrder = tokenIds;
+  localTokenOrder = tokenOrderFromDOM(container);
   localTextSequence = textSequenceFromDOM(container);
   alignmentContainer = container;
+  alignmentCanvas = element.querySelector('.annotation-canvas');
+  alignmentBoxGroups = [...element.querySelectorAll('.annotation-canvas [data-box-id]')];
   alignmentStateReady = true;
   container.dataset.alignmentReady = 'true';
   container.setAttribute('aria-busy', 'false');
@@ -936,6 +952,9 @@ function initializeAlignmentStateFromDOM() {
   return true;
 }
 const updateExcludedChips = container => {
+  // Gradio can deliver the value before replacing its chip/canvas DOM.
+  if (!alignmentDOMIsReady(container)) return;
+  restoreOrderDragStatuses(orderDrag);
   const chips = [...container.querySelectorAll('[data-order-chip]')];
   const count = Number(container.dataset.excludedCount || 0);
   chips.forEach((chip, index) => {
@@ -946,16 +965,15 @@ const updateExcludedChips = container => {
     if (boxId) chip.dataset.assignedBoxId = boxId; else delete chip.dataset.assignedBoxId;
     chip.classList.toggle('suspicious', Boolean(localBoxes[boxId]?.suspicious) && !excluded && chip.dataset.character !== 'MISS');
   });
+  synchronizeMissingPreview(container);
   renderSuspiciousPreview();
   updateCanvasLabels();
 };
 
-// Apply Changes and Next both commit the browser draft to the Python session.
-element.addEventListener('apply-status-preview', () => {
-  if (props.value.step !== 4) return;
-  const container = element.querySelector('.order-chips');
-  if (!container) return;
-  updateExcludedChips(container);
+// Labels and MISS overlays follow the same browser draft, including cancelled
+// drags and drafts retained after Apply validation fails.
+function synchronizeMissingPreview(container) {
+  let changed = false;
   const characterByBoxId = new Map(
     [...container.querySelectorAll('[data-order-chip][data-assigned-box-id]')]
       .map(chip => [chip.dataset.assignedBoxId, chip.dataset.character]));
@@ -966,12 +984,21 @@ element.addEventListener('apply-status-preview', () => {
     const missing = characterByBoxId.get(id) === 'MISS';
     const rect = group.querySelector('rect:not([data-image-resize-handle])');
     if (rect) {
-      if (missing) rect.dataset.missing = '1';
-      else delete rect.dataset.missing;
+      if (missing && rect.dataset.missing !== '1') {
+        rect.dataset.missing = '1';
+        changed = true;
+      } else if (!missing && rect.dataset.missing !== undefined) {
+        delete rect.dataset.missing;
+        changed = true;
+      }
     }
-    group.querySelector('[data-miss-mark]')?.remove();
-    if (missing) {
-      const mark = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    let mark = group.querySelector('[data-miss-mark]');
+    if (!missing && mark) {
+      mark.remove();
+      changed = true;
+    }
+    if (missing && !mark) {
+      mark = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       mark.setAttribute('data-miss-mark', '1');
       mark.setAttribute('stroke', '#ef4444');
       mark.setAttribute('stroke-width', '2.25');
@@ -984,11 +1011,19 @@ element.addEventListener('apply-status-preview', () => {
         mark.appendChild(line);
       });
       group.insertBefore(mark, group.querySelector('[data-box-order-label]'));
+      changed = true;
     }
-    renderLocalStatus(id, box.status, box.unknown);
   });
-  renderSelection(false);
-});
+  return changed;
+}
+
+function restoreOrderDragStatuses(state) {
+  // Preview normalization must not erase flags on boxes a token only passes
+  // over. Each permutation starts from the status draft captured at drag start.
+  for (const [id, status] of Object.entries(state?.originalStatuses || {})) {
+    if (localBoxes[id]) Object.assign(localBoxes[id], status);
+  }
+}
 
 function renderSuspiciousPreview() {
   if (props.value.step !== 4) return;
@@ -1077,6 +1112,11 @@ const beginOrderDrag = event => {
   if (!state?.active || event.pointerId !== state.pointerId) return;
   state.started = true;
   state.originalOrder = tokenOrderFromDOM(state.container);
+  state.originalStatuses = Object.fromEntries(Object.entries(localBoxes).map(([id, box]) => [id, {
+    status: box.status, damage_level: box.damage_level, unknown: box.unknown,
+    unavailable_font: box.unavailable_font, expert_prediction: box.expert_prediction,
+    suspicious: box.suspicious,
+  }]));
   state.container.classList.add('is-sorting'); state.chip.classList.add('dragging');
 };
 const arrangeOrder = (container, order) => order.forEach(tokenId => {
@@ -1088,6 +1128,7 @@ const cleanupOrderDrag = (reason, commit = false) => {
   const state = orderDrag;
   if (!state || state.cleaning) return;
   state.cleaning = true;
+  restoreOrderDragStatuses(state);
   orderDrag = null;
   if (state.started) {
     if (!commit && state.container?.isConnected) {
@@ -1721,8 +1762,16 @@ window.addEventListener('keydown', event => {
 const alignmentObserver = new MutationObserver(() => {
   if (props.value.step !== 4) return;
   const container = element.querySelector('.order-chips');
-  if (container && (!alignmentStateReady || container !== alignmentContainer)) {
+  const canvas = element.querySelector('.annotation-canvas');
+  const groups = [...element.querySelectorAll('.annotation-canvas [data-box-id]')];
+  const replacedBoxes = groups.length !== alignmentBoxGroups.length
+    || groups.some((group, index) => group !== alignmentBoxGroups[index]);
+  if (container && (!alignmentStateReady || container !== alignmentContainer || canvas !== alignmentCanvas || replacedBoxes)) {
     initializeAlignmentStateFromDOM();
+  } else if (alignmentDOMIsReady(container) && synchronizeMissingPreview(container)) {
+    // A DOM patch may replace a rect/mark inside an existing box group.
+    // Only repaint changed overlays; our own label mutations must settle.
+    renderSuspiciousPreview();
   }
 });
 alignmentObserver.observe(element, { childList: true, subtree: true });
