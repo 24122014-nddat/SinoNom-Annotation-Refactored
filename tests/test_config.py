@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,19 +16,13 @@ CONFIG_PATH = ROOT / "configs" / "tap_1.json"
 class ConfigSchemaTests(unittest.TestCase):
     def test_document_rules_are_loaded_only_from_the_json_file(self) -> None:
         config = load_config(CONFIG_PATH)
+        raw = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(ROOT / "input" / "tap1-short-21-page.pdf", config.input_pdf_path)
+        self.assertEqual((CONFIG_PATH.parent / raw["input_pdf_path"]).resolve(), config.input_pdf_path)
         self.assertEqual("^VĂN BIA SỐ\\s+(?P<number>\\d+)\\s*$", config.title_pattern)
         self.assertEqual("Nguyên văn chữ Hán Nôm", config.content_start)
         self.assertEqual(
-            (
-                "Calibri",
-                "Cambria-Bold",
-                "NomNaTong",
-                "PalatinoLinotype",
-                "PalatinoLinotype,Bold",
-                "PalatinoLinotype,BoldItalic",
-            ),
+            tuple(raw["encoded_fonts"]),
             tuple(font.pdf_name for font in config.encoded_fonts),
         )
         self.assertTrue(all(font.reference_path.is_file() for font in config.encoded_fonts))

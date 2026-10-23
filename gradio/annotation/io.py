@@ -1,6 +1,8 @@
 import json
 import os
 import tempfile
+from collections import Counter
+from contextlib import contextmanager
 from pathlib import Path
 from .bbox import validate_coordinates
 from .text_alignment import MISSING_ANNOTATION, validate_bbox_text_count, characters
@@ -70,6 +72,32 @@ def atomic_write(path, data):
     finally:
         if name and os.path.exists(name):
             os.unlink(name)
+
+
+@contextmanager
+def rollback_saved_files(paths):
+    """Restore the previous save if any file in a multi-file commit fails."""
+    backups = {Path(path): Path(path).read_bytes() if Path(path).exists() else None
+               for path in paths}
+    try:
+        yield
+    except Exception:
+        for path, previous in backups.items():
+            if previous is None:
+                path.unlink(missing_ok=True)
+            elif not path.exists() or path.read_bytes() != previous:
+                temporary = None
+                try:
+                    with tempfile.NamedTemporaryFile('wb', dir=path.parent, delete=False) as f:
+                        temporary = f.name
+                        f.write(previous)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(temporary, path)
+                finally:
+                    if temporary and os.path.exists(temporary):
+                        os.unlink(temporary)
+        raise
 
 
 def load_image_list(folder):
@@ -188,6 +216,10 @@ def validate_source_mismatch_document(doc, image, size):
         missing_count = doc['bounding_box_count'] - doc['source_character_count']
         if list(annotations.values()).count(MISSING_ANNOTATION) != missing_count:
             raise ValueError('Missing-source annotations contain an invalid MISS count.')
+        if (any(not isinstance(value, str) for value in annotations.values())
+                or Counter(value for value in annotations.values() if value != MISSING_ANNOTATION)
+                != Counter(characters(doc['source_text']))):
+            raise ValueError('Missing-source annotations do not match source content.')
     elif mismatch_type == 'extra_text':
         sequence=doc.get('text_sequence');excluded=doc.get('excluded_characters')
         excess=doc['source_character_count']-doc['bounding_box_count']

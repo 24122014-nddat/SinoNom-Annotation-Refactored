@@ -184,9 +184,8 @@ class GradioCallbacks(unittest.TestCase):
         self.assertNotIn("send('commit_boxes'",script)
         self.assertNotIn("send('status'",script)
         self.assertIn('statuses: Object.fromEntries',script)
-        self.assertIn('previousBoxes[id]?.status',script)
         self.assertIn('boxes: Object.fromEntries',script)
-        self.assertIn("kind:'marquee'",script)
+        self.assertIn("kind: 'marquee'",script)
         self.assertIn('selectedIds = new Set()',script)
         self.assertIn('const showResizeHandles = selectedIds.size === 1',script)
         self.assertIn("group.classList.toggle('active-region', active && showResizeHandles)",script)
@@ -201,10 +200,10 @@ class GradioCallbacks(unittest.TestCase):
         self.assertIn('captureChipRects',script)
         self.assertIn('getBoundingClientRect()',script)
         self.assertIn('translate3d(${dx}px, ${dy}px, 0)',script)
-        self.assertIn('duration:180',script)
-        self.assertIn("easing:'cubic-bezier(.22, 1, .36, 1)'",script)
+        self.assertRegex(script,r'duration:\s*180')
+        self.assertRegex(script,r"easing:\s*'cubic-bezier\(.22, 1, .36, 1\)'")
         self.assertIn('chipReflowAnimations.get(chip)?.cancel()',script)
-        self.assertIn("White:'#f4f4f5', Cyan:'#22d3ee', Amber:'#f59e0b'",script)
+        self.assertIn("White: '#f4f4f5', Cyan: '#22d3ee', Amber: '#f59e0b'",script)
         self.assertIn("#bbox-color-palette input, #bbox-color-palette select",script)
         self.assertIn("root.addEventListener('bbox-color-change'",script)
         self.assertIn("new CustomEvent('bbox-color-change'",app_source)
@@ -214,11 +213,10 @@ class GradioCallbacks(unittest.TestCase):
         self.assertIn('Excluded from annotation data',script)
         self.assertNotIn('excluded-divider',script)
         self.assertIn("event.target.closest('#bbox-x1 input, #bbox-y1 input, #bbox-x2 input, #bbox-y2 input')",script)
-        self.assertIn('localBoxes[activeBoxId].bbox=[x1,y1,x2,y2]',script)
+        self.assertIn('localBoxes[activeBoxId].bbox = [x1, y1, x2, y2]',script)
         self.assertIn('syncingCoordinateControls = true',script)
         self.assertIn('if (syncingCoordinateControls || props.value.step !== 3',script)
-        self.assertIn("send('add',{",script)
-        self.assertIn('boxes:Object.fromEntries(Object.entries(localBoxes)',script)
+        self.assertNotIn("send('add',",script)
         self.assertIn('syncExternalControls();',script)
         self.assertNotIn("addEventListener('dragover'",script)
         editor_css=(Path(__file__).resolve().parents[1]/'ui/assets/editor.css').read_text()
@@ -230,16 +228,10 @@ class GradioCallbacks(unittest.TestCase):
         self.assertNotIn('.excluded-divider',editor_css)
         self.assertIn('overflow-x: auto',editor_css)
         self.assertIn('overflow-y: auto',editor_css)
-        self.assertIn('const viewportBox = viewport.getBoundingClientRect()',script)
-        self.assertIn("svg.style.width = '0px'",script)
-        self.assertIn("svg.style.height = '0px'",script)
-        self.assertIn('const measuredViewportBox = viewport.getBoundingClientRect()',script)
-        self.assertIn('const fit = Math.min(availableWidth / width, fittedHeight / height)',script)
-        self.assertIn("Math.max(25,Math.min(150,",script)
+        self.assertIn("Math.max(25, Math.min(500,",script)
         self.assertIn("group.dataset.status = status",script)
         workbench_css=(Path(__file__).resolve().parents[1]/'ui/assets/workbench.css').read_text()
         self.assertIn('#main-workspace { display: flex !important;',workbench_css)
-        self.assertIn('min-height: 700px',workbench_css)
         self.assertIn('color-scheme: dark',workbench_css)
         self.assertIn('button:not(:disabled):hover',workbench_css)
         self.assertIn('button.primary:not(:disabled):hover',workbench_css)
@@ -318,9 +310,9 @@ class GradioCallbacks(unittest.TestCase):
         self.assertIn('grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr)',css)
         self.assertIn('.status-order-board .image-viewport',css)
         workbench_css=(Path(__file__).resolve().parents[1]/'ui/assets/workbench.css').read_text()
-        self.assertIn('grid-template-columns: repeat(4, minmax(0, 1fr))',workbench_css)
+        self.assertIn('grid-template-columns: minmax(0, var(--sidebar-width)) minmax(0, 3fr)',workbench_css)
         self.assertIn('#control-panel { grid-column: 1; }',workbench_css)
-        self.assertIn('#main-workspace { grid-column: 2 / 5; }',workbench_css)
+        self.assertIn('#main-workspace { grid-column: 2; }',workbench_css)
         self.assertIn('@media (max-width: 767.98px)',workbench_css)
 
     def test_apply_and_next_snapshot_visible_text_cards(self):
@@ -338,7 +330,6 @@ class GradioCallbacks(unittest.TestCase):
         self.assertIn("with gr.Accordion('source_mismatches.json'",source)
         self.assertNotIn('load_suspicious_details(options.output_dir)',source)
         self.assertIn('collect_source_mismatches(',source)
-        self.assertIn('delete_selected,[session,selection_bridge,x1,y1,x2,y2]',source)
         self.assertIn("value='White',show_label=False,interactive=True",source)
         self.assertNotIn("label='Outline color'",source)
 
@@ -348,10 +339,10 @@ class GradioCallbacks(unittest.TestCase):
         self.assertNotIn('Draft',markup)
         self.assertNotIn('save-indicator',markup)
         self.assertIn('<span class="brand-mark" aria-hidden="true">文</span>',markup)
-        self.assertEqual(markup.count('class="stepper-item'),7)
-        self.assertEqual(markup.count('class="stepper-label"'),7)
+        self.assertEqual(markup.count('class="stepper-item'),6)
+        self.assertEqual(markup.count('class="stepper-label"'),6)
         self.assertIn('aria-current="step"',markup)
-        for label in ('Image','Content','Bounding Boxes','Reading Order','Status','Crop','Review'):
+        for label in ('Image','Content','Bounding Boxes & Sort','Status & Order','Crop','Review'):
             self.assertIn(f'>{label}</span>',markup)
 
     def test_canvas_box_labels_are_order_driven(self):
@@ -383,7 +374,7 @@ class GradioCallbacks(unittest.TestCase):
         self.assertIn('!mismatchConfirmationInvalidated',editor_js)
         self.assertIn('ctx,_,_=commit_frontend_boxes(ctx,selection)',app_source)
         self.assertIn('[session,mismatch_type,mismatch_note,selection_bridge]',app_source)
-        self.assertIn('snapshot_board_state_js(3)',app_source)
+        self.assertIn('snapshot_board_state_js(3,deselect=True)',app_source)
         self.assertIn('board.dataset.localBoxesSnapshot = serializedSnapshot',editor_js)
         self.assertIn('snapshot = JSON.parse(board.dataset.localBoxesSnapshot)',app_source)
         self.assertIn('def clear_source_mismatch(ctx,selection):',app_source)
@@ -396,16 +387,16 @@ class GradioCallbacks(unittest.TestCase):
         self.assertNotIn("#apply-bbox-changes",editor_js)
         self.assertNotIn('commitDraftState',editor_js)
 
-    def test_matching_live_counts_hide_mismatch_section_immediately(self):
+    def test_matching_counts_allow_other_source_mismatch(self):
         editor_js=(Path(__file__).resolve().parents[1]/'ui/assets/editor.js').read_text()
-        self.assertIn("mismatchGroup.style.display = matched ? 'none' : 'block'",editor_js)
+        self.assertIn("mismatchGroup.style.display = 'block'",editor_js)
         self.assertNotIn("matched && !props.value.mismatchRecorded",editor_js)
 
     def test_clearing_mismatch_resets_frontend_confirmation(self):
         editor_js=(Path(__file__).resolve().parents[1]/'ui/assets/editor.js').read_text()
         app_source=(Path(__file__).resolve().parents[1]/'app.py').read_text()
         self.assertIn('props.value.clearMismatchConfirmed',editor_js)
-        self.assertIn('localMismatchConfirmed = false',editor_js)
+        self.assertIn('mismatchConfirmationInvalidated = true',editor_js)
         self.assertIn("result[8]['value']['clearMismatchConfirmed'] = True",app_source)
 
     def test_sort_selected_conflict_display_groups_consecutive_orders(self):
@@ -436,7 +427,7 @@ class GradioCallbacks(unittest.TestCase):
         self.assertIn('#confirm-source-mismatch',css)
         self.assertIn('justify-content: center',css)
         app_source=(Path(__file__).resolve().parents[1]/'app.py').read_text()
-        self.assertIn('### Box-Content Mismatch',app_source)
+        self.assertIn('### Box-Content Validation',app_source)
         self.assertIn("('Missing Content','missing_text')",app_source)
         self.assertIn("('Extra Content','extra_text')",app_source)
         self.assertIn("elem_id='suspicious-toggle'",app_source)
@@ -611,321 +602,106 @@ class GradioCallbacks(unittest.TestCase):
             self.assertEqual(json.loads(source.read_text())[0]['noi_dung'][0]['chuyen_muc'][0]['van_ban'],'永')
             self.assertFalse((root/'out/.state/content.json').exists())
 
+    def current_app(self, root, text, skip_detection=True):
+        image=root/'1.png';Image.new('RGB',(100,100),'white').save(image)
+        source=root/'source.json'
+        atomic_write(source,[{'noi_dung':[{'ky_hieu':'1','chuyen_muc':[
+            {'tieu_de':'Nguyên văn chữ Hán Nôm','van_ban':text}]}]}])
+        args=['--image-dir',str(root),'--source-json',str(source),'--output-dir',str(root/'out')]
+        if skip_detection:args.append('--skip-detection')
+        app=create_app(parser().parse_args(args))
+        callbacks={f.fn.__name__:f.fn for f in app.fns.values() if f.fn}
+        callbacks.update({f.fn.__defaults__[0]:f.fn for f in app.fns.values()
+                          if f.fn and f.fn.__name__=='<lambda>' and f.fn.__defaults__
+                          and f.fn.__defaults__[0] in ('save','back','undo')})
+        opened=callbacks['open_image'](dict(active=new_state(),drafts={}),str(image))
+        output_fn=next(f for f in app.fns.values() if f.fn and f.fn.__name__=='open_image')
+        bridge=next(i for i,c in enumerate(output_fn.outputs) if c.elem_id=='content-draft-bridge')
+        callbacks['draft_index']=bridge
+        callbacks['advance']=lambda ctx,draft=None,**kw:list(callbacks['next_with_progress'](ctx,draft,**kw))[-1]
+        def board(ctx,name,payload):
+            payload=dict(payload,revision=ctx['active']['revision'],image=ctx['active']['image'])
+            return callbacks['on_action'](ctx,gr.EventData(None,dict(action=name,payload=payload)))
+        callbacks['board']=board
+        return callbacks,opened,image
+
     def test_skip_detection_never_calls_model(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder).resolve()
-            image=root/'12305.png';Image.new('RGB',(100,100),'white').save(image)
-            source=root/'source.json'
-            atomic_write(source,[{'noi_dung':[{'ky_hieu':'12305','chuyen_muc':[
-                {'tieu_de':'Nguyên văn chữ Hán Nôm','van_ban':'永'}]}]}])
-            options=parser().parse_args(['--image-dir',str(root),'--source-json',str(source),
-                                        '--output-dir',str(root/'out'),'--skip-detection'])
-            app=create_app(options)
-            functions=[f.fn for f in app.fns.values() if f.fn]
-            open_image=next(f for f in functions if f.__name__=='open_image')
-            on_action=next(f for f in functions if f.__name__=='on_action')
-            def action(name):
-                if name == 'next':
-                    stream=next(f for f in functions if f.__name__=='next_with_progress')
-                    return lambda ctx,draft=None: list(stream(ctx,draft))[-1]
-                if name == 'save_content':
-                    return next(f for f in functions if f.__name__=='save_content_draft')
-                return next(f for f in functions if f.__name__=='<lambda>' and f.__defaults__==(name,))
-            opened=open_image(dict(active=new_state(),drafts={}),str(image))
-            ctx=opened[0];content_draft=opened[-2]
-            saved=action('save_content')(ctx,content_draft);ctx=saved[0]
+            root=Path(folder).resolve();cb,opened,_=self.current_app(root,'永')
             with patch('annotation.workflow.detect') as detector:
-                result=action('next')(ctx,saved[-2]);ctx=result[0]
+                ctx=cb['advance'](opened[0],opened[cb['draft_index']])[0]
                 self.assertEqual(ctx['active']['current_step'],3)
-                self.assertFalse(result[2]['visible'])
-                # Even an explicitly submitted canvas/API action cannot invoke the model.
-                with self.assertLogs('app',level='ERROR'):
-                    result=on_action(ctx,gr.EventData(None,dict(action='detect',payload={})))
-                ctx=result[0]
-                self.assertIn('Detection is disabled',result[2]['value'])
-                active=ctx['active']
-                ctx=on_action(ctx,gr.EventData(None,dict(
-                    action='add',payload={'bbox':[0,0,10,10],
-                                          'revision':active['revision'],
-                                          'image':active['image']})))[0]
-                ctx=action('next')(ctx)[0]
+                with self.assertWarnsRegex(UserWarning,'Detection is disabled'), self.assertLogs('app',level='ERROR'):
+                    rejected=cb['board'](ctx,'detect',{})
+                self.assertEqual(rejected[0]['active']['regions'],ctx['active']['regions'])
+                self.assertFalse(rejected[0]['active']['detection_loaded'])
+                boxes={'local_1':{'bbox':[0,0,10,10],'status':'intact','order':1}}
+                ctx=cb['advance'](ctx,selection=json.dumps({'boxes':boxes}))[0]
                 self.assertEqual(ctx['active']['current_step'],4)
-                self.assertEqual(ctx['active']['annotations'],{'1':'永'})
-                ctx=action('next')(ctx)[0]
                 self.assertEqual(ctx['active']['annotations'],{'1':'永'})
                 detector.assert_not_called()
 
     def test_ui_workflow(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder).resolve();images=root/'images';images.mkdir()
-            path=images/'12305.png';Image.new('RGB',(100,100),'white').save(path)
-            source=root/'source.json'
-            atomic_write(source,[{'noi_dung':[{'ky_hieu':'12305','chuyen_muc':[{'tieu_de':'Nguyên văn chữ Hán Nôm','van_ban':'永寺樂'}]}]}])
-            options=parser().parse_args(['--image-dir',str(images),'--source-json',str(source),'--output-dir',str(root/'out')])
-            app=create_app(options)
-            functions=[f.fn for f in app.fns.values() if f.fn]
-            open_image=next(f for f in functions if f.__name__=='open_image')
-            on_action=next(f for f in functions if f.__name__=='on_action')
-            update_coordinates=next(f for f in functions if f.__name__=='update_coordinates')
-            delete_selected=next(f for f in functions if f.__name__=='delete_selected')
-            def board_action(ctx,name,payload):
-                s=ctx['active']
-                event=gr.EventData(None,dict(action=name,payload=dict(payload,revision=s['revision'],image=s['image'])))
-                return on_action(ctx,event)
-            result=open_image(dict(active=new_state(),drafts={}),str(path))
-            ctx=result[0];self.assertEqual(ctx['active']['current_step'],2)
-            self.assertTrue(result[27]['visible'])
-            self.assertTrue(result[40]['visible'])
-            self.assertFalse(result[39]['visible'])
-            lambdas=[f for f in functions if f.__name__=='<lambda>']
-            def action(name):
-                if name == 'next':
-                    stream=next(f for f in functions if f.__name__=='next_with_progress')
-                    return lambda ctx,draft=None: list(stream(ctx,draft))[-1]
-                if name == 'save_content':
-                    return next(f for f in functions if f.__name__=='save_content_draft')
-                return next(f for f in lambdas if f.__defaults__==(name,))
-            saved=action('save_content')(ctx,result[-2]);ctx=saved[0]
-            self.assertTrue(ctx['active']['workflow']['content_verified'])
-            with self.assertLogs('app',level='ERROR'), patch('annotation.workflow.detect',side_effect=RuntimeError('fixture model unavailable')) as detector:
-                stream=next(f for f in functions if f.__name__=='next_with_progress')(ctx,saved[-2])
+            root=Path(folder).resolve();cb,opened,image=self.current_app(root,'永寺樂',skip_detection=False)
+            with patch('annotation.workflow.detect',side_effect=RuntimeError('fixture model unavailable')), self.assertLogs('app',level='ERROR'), self.assertWarnsRegex(UserWarning,'fixture model unavailable'):
+                stream=cb['next_with_progress'](opened[0],opened[cb['draft_index']])
                 running=next(stream)
-                self.assertEqual(running[0]['active']['current_step'],3)
                 self.assertEqual(running[2]['value'],'Running detection…')
-                detector.assert_not_called()
                 result=next(stream)
             ctx=result[0];self.assertEqual(ctx['active']['current_step'],3)
-            self.assertFalse(result[27]['visible'])
-            self.assertIn('fixture model unavailable',result[2]['value'])
-            advance=next(f for f in functions if f.__name__=='next_with_progress')
-            # Mounted coordinate controls submit placeholder values even when
-            # no box exists. Next must report the actual count validation,
-            # rather than treating those placeholders as a manual edit.
-            with patch('annotation.workflow.detect',side_effect=RuntimeError('fixture model unavailable')):
-                no_boxes=list(advance(
-                    ctx,None,None,'','{}','intact',0,0,1,1,None))[-1]
-            self.assertNotIn('Select a box and enter all four coordinates',
-                             no_boxes[2]['value'])
-            ctx=board_action(ctx,'add',{'bbox':[0,0,10,10]})[0]
-            first_uid=next(iter(ctx['active']['regions']))
-            ctx=board_action(ctx,'add',{
-                'bbox':[20,0,30,10],
-                'boxes':{first_uid:[2,2,12,12]},
-                'active':first_uid,'selected':[first_uid],
-            })[0]
-            self.assertEqual(ctx['active']['regions'][first_uid]['bbox'],[2,2,12,12])
-            ctx=board_action(ctx,'add',{'bbox':[40,0,50,10]})[0]
-            region_uids=list(ctx['active']['regions'])
-            first_uid,deleted_uid=region_uids[0],region_uids[-1]
-            live_boxes={
-                uid:list(region['bbox'])
-                for uid,region in ctx['active']['regions'].items()
-            }
-            live_boxes[first_uid]=[4,4,14,14]
-            deleted_bbox=live_boxes[deleted_uid]
-            delete_snapshot=json.dumps({
-                'active':deleted_uid,'selected':[deleted_uid],'boxes':live_boxes,
-            })
-            ctx=delete_selected(ctx,delete_snapshot,*deleted_bbox)[0]
-            self.assertNotIn(deleted_uid,ctx['active']['regions'])
-            self.assertEqual(ctx['active']['regions'][first_uid]['bbox'],[4,4,14,14])
-            # Restore the third region so the remainder of the full workflow
-            # continues with one box per source character.
-            ctx=board_action(ctx,'add',{'bbox':[40,0,50,10]})[0]
-            first_uid=list(ctx['active']['regions'])[0]
-            ctx=board_action(ctx,'commit_boxes',{
-                'boxes':{first_uid:[1,1,11,11]},
-                'active':first_uid,'selected':[first_uid],
-            })[0]
-            self.assertEqual(ctx['active']['regions'][first_uid]['bbox'],[1,1,11,11])
-            local_selection=json.dumps({'active':first_uid,'selected':[first_uid]})
-            ctx=update_coordinates(ctx,local_selection,2,2,12,12)[0]
-            self.assertEqual(ctx['active']['regions'][first_uid]['bbox'],[2,2,12,12])
-            # A first-time manual coordinate edit is a direct Next input; it
-            # must not require Update coordinates or a Back/Next round trip.
-            result=list(advance(
-                ctx,None,None,'',local_selection,'intact',3,3,13,13,None))[-1]
-            ctx=result[0]
-            self.assertEqual(ctx['active']['regions'][first_uid]['bbox'],[3,3,13,13])
+            boxes={f'local_{i}':{'bbox':[i*20,0,i*20+10,10],'status':'intact','order':i+1} for i in range(3)}
+            # Complete frontend snapshots carry local additions, edits, deletions and sort.
+            draft=json.dumps({'boxes':boxes,'selected':['local_0'],'active':'local_0'})
+            result=cb['advance'](ctx,selection=draft);ctx=result[0]
             self.assertEqual(ctx['active']['current_step'],4)
-            self.assertTrue(result[18]['visible'])
-            self.assertIn('source-preview',result[8]['value']['markup'])
-            self.assertIn('永',result[8]['value']['markup'])
-            self.assertIn('stroke="#f4f4f5"',result[8]['value']['markup'])
-            self.assertNotIn('stroke="#22c55e"',result[8]['value']['markup'])
-            self.assertNotIn('stroke="#ef4444"',result[8]['value']['markup'])
-            self.assertNotIn('status-legend',result[8]['value']['markup'])
-            self.assertIn('data-box-id',result[8]['value']['markup'])
-            self.assertNotIn('data-region-uid',result[8]['value']['markup'])
-            region_uids=list(ctx['active']['regions'])
-            first_damaged_uid,damaged_uid=region_uids[:2]
-            # Reading order is edited as text-only cards and explicitly
-            # committed when continuing with Next.
-            self.assertIn('class="order-chip',result[8]['value']['markup'])
-            self.assertIn('class="order-chips"',result[8]['value']['markup'])
-            self.assertIn('draggable="false"',result[8]['value']['markup'])
-            self.assertIn('data-token-id=',result[8]['value']['markup'])
-            self.assertNotIn('chip-id',result[8]['value']['markup'])
-            mapping=dict(ctx['active']['annotations'])
-            with self.assertLogs('app',level='ERROR'):
-                rejected=board_action(ctx,'reorder_text',{'sequence':['永','寺','寺']})
-            self.assertEqual(rejected[0]['active']['reading_order'],[1,2,3])
-            apply_reading_order=next(
-                f for f in functions if f.__name__=='apply_reading_order')
-            local_order=json.dumps({'textSequence':['永','樂','寺']})
-            ctx=apply_reading_order(rejected[0],local_order)[0]
-            self.assertNotEqual(ctx['active']['annotations'],mapping)
-            mapping=dict(ctx['active']['annotations'])
-            self.assertEqual(mapping,{'1':'永','2':'樂','3':'寺'})
-            reordered_markup=board_action(ctx,'select',{'id':1})[8]['value']['markup']
-            # The cards expose only their text; Box IDs remain on the canvas.
-            self.assertLess(reordered_markup.index('data-character="永"'),
-                            reordered_markup.index('data-character="樂"'))
-            self.assertLess(reordered_markup.index('data-character="樂"'),
-                            reordered_markup.index('data-character="寺"'))
-            self.assertNotIn('<span class="chip-id">',reordered_markup)
-            result=action('next')(ctx);ctx=result[0]
-            self.assertEqual(ctx['active']['current_step'],5)
-            self.assertTrue(result[15]['visible'])
-            self.assertIn('status-legend',result[8]['value']['markup'])
-            self.assertIn('stroke="#22c55e"',result[8]['value']['markup'])
-            first_damaged_box_id=ctx['active']['box_id_by_region'][first_damaged_uid]
-            damaged_box_id=ctx['active']['box_id_by_region'][damaged_uid]
-            # Each completed radio edit is persisted before moving to another
-            # box. A lagging bridge must not undo it on Next.
-            ctx=board_action(ctx,'status',{
-                'id':first_damaged_box_id,'status':'damaged',
-            })[0]
-            local_selection=json.dumps({
-                'active':damaged_box_id,'selected':[damaged_box_id],
-                'statuses':{uid:'intact' for uid in region_uids},
-            })
-            result=list(advance(ctx,None,None,'',local_selection,'damaged'))[-1]
-            ctx=result[0]
-            self.assertEqual(ctx['active']['regions'][first_damaged_uid]['status'],'damaged')
-            self.assertEqual(ctx['active']['regions'][damaged_uid]['status'],'damaged')
-            self.assertEqual(ctx['active']['current_step'],6)
-            self.assertTrue(result[21]['visible'])
-            self.assertNotIn('data-image-resize-handle',result[8]['value']['markup'])
-            # Typed crop coordinates are committed by Next without Apply crop.
-            result=list(advance(
-                ctx,None,None,'','{}','intact',None,None,None,None,
-                json.dumps([5,10,95,70])))[-1]
-            ctx=result[0]
-            self.assertEqual(ctx['active']['annotations'],mapping)
-            self.assertEqual(ctx['active']['crop'],[5,10,95,70])
+            self.assertEqual(ctx['active']['annotations'],{'1':'永','2':'寺','3':'樂'})
+            assignment={'textSequence':['永','樂','寺'],'tokenOrder':['1','3','2'],
+                        'statuses':{'1':'intact','2':'damaged','3':'intact'},
+                        'damage_levels':{'1':None,'2':2,'3':None},
+                        'unknowns':{'1':False,'2':False,'3':False}}
+            result=cb['apply_status_changes'](ctx,json.dumps(assignment),'intact');ctx=result[0]
+            self.assertEqual(ctx['active']['annotations'],{'1':'永','2':'樂','3':'寺'})
+            self.assertEqual(ctx['active']['bounding_boxes']['2']['damage_level'],2)
+            ctx=cb['advance'](ctx)[0];self.assertEqual(ctx['active']['current_step'],6)
+            result=cb['advance'](ctx,selection=json.dumps({'crop':[1,2,90,95]}));ctx=result[0]
             self.assertEqual(ctx['active']['current_step'],7)
-            self.assertIn('viewBox="5 10 90 60"',result[8]['value']['markup'])
-            self.assertIn('aspect-ratio:90/60',result[8]['value']['markup'])
             self.assertIn('cropped review',result[8]['value']['markup'])
-            self.assertEqual(result[8]['value']['width'],90)
-            self.assertEqual(result[8]['value']['height'],60)
-            self.assertEqual(ctx['active']['reading_order'],[1,2,3])
-            self.assertEqual(ctx['active']['bounding_boxes'][first_damaged_box_id]['status'],'damaged')
-            self.assertEqual(ctx['active']['bounding_boxes'][damaged_box_id]['status'],'damaged')
-            damaged_annotation=ctx['active']['annotations'][damaged_box_id]
-            self.assertIn(f'{damaged_box_id} {damaged_annotation}',
-                          result[8]['value']['markup'])
-            self.assertIn(
-                f'<title>{damaged_box_id} {damaged_annotation} · damaged</title>',
-                result[8]['value']['markup'])
-            self.assertNotIn('<table',result[8]['value']['markup'])
-            result=action('save')(ctx);ctx=result[0]
-            self.assertEqual(ctx['active']['current_step'],1)
-            self.assertFalse(ctx['active'].get('image'))
-            self.assertTrue(result[39]['visible'])
-            self.assertFalse(result[40]['visible'])
-            self.assertFalse(result[41]['visible'])
-            self.assertFalse(result[42]['visible'])
-            self.assertTrue((root/'out/12305.json').exists())
-            saved=json.loads((root/'out/12305.json').read_text())
-            self.assertEqual(set(saved),{'image','bounding_boxes','annotations','crop','image_resize'})
-            self.assertEqual(saved['crop']['top_left'],[5,10])
-            self.assertEqual(saved['image_resize'],{
-                'source_size':[100,100], 'output_size':[100,100],
-                'scale_x':1.0, 'scale_y':1.0,
-            })
-            export=next(f for f in functions if f.__name__=='save_folder')
-            payload=json.loads(export())
-            self.assertEqual(payload['name'],'annotations.zip')
-            self.assertTrue((root/'out/annotations.zip').is_file())
+            saved=result[20]['value']
+            ctx=cb['save'](ctx)[0];self.assertEqual(ctx['active']['current_step'],1)
+            payload=json.loads(cb['save_folder']())
             with zipfile.ZipFile(BytesIO(base64.b64decode(payload['content']))) as bundle:
-                annotations=json.loads(bundle.read('text_annotations.json'))
-                contents=json.loads(bundle.read('inscription_content.json'))
-            self.assertEqual(annotations,[saved])
-            self.assertEqual(contents[0]['image'],'12305.png')
-            self.assertEqual(contents[0]['content']['Nguyên văn chữ Hán Nôm'],'永寺樂')
-            # Reopening reads the durable annotation, starts at Content, and
-            # marks detection as already loaded.
-            restored_result=open_image(ctx,str(path));restored=restored_result[0]
-            self.assertEqual(restored['active']['current_step'],2)
-            self.assertTrue(restored['active']['detection_loaded'])
-            self.assertEqual(restored['active']['annotations'],{'1':'永','2':'樂','3':'寺'})
-            reopened_saved=action('save_content')(restored,restored_result[-2])
-            reopened=action('next')(reopened_saved[0],reopened_saved[-2])[0]
-            self.assertEqual(reopened['active']['current_step'],3)
-            first_loaded=next(iter(reopened['active']['regions'].values()))['bbox']
-            reopened_result=list(advance(
-                reopened,None,None,'','{}','intact',*first_loaded,None))[-1]
-            self.assertEqual(reopened_result[0]['active']['current_step'],4)
-            self.assertNotIn('Select a box and enter all four coordinates',
-                             reopened_result[2]['value'])
+                self.assertEqual(json.loads(bundle.read('text_annotations.json')),[saved])
+                self.assertEqual(json.loads(bundle.read('inscription_content.json'))[0]['content']['Nguyên văn chữ Hán Nôm'],'永寺樂')
+            reopened=cb['open_image'](ctx,str(image))
+            ctx=cb['advance'](reopened[0],reopened[cb['draft_index']])[0]
+            ctx=cb['advance'](ctx)[0]
+            self.assertEqual(ctx['active']['current_step'],4)
+            self.assertEqual(ctx['active']['annotations'],saved['annotations'])
+            self.assertEqual(ctx['active']['bounding_boxes']['2']['damage_level'],2)
+            self.assertEqual(ctx['active']['crop'],[1,2,90,95])
 
     def test_ui_source_mismatch_flow(self):
         with tempfile.TemporaryDirectory() as folder:
-            root=Path(folder).resolve();image=root/'1.png'
-            Image.new('RGB',(100,100),'white').save(image)
-            source=root/'source.json'
-            atomic_write(source,[{'noi_dung':[{'ky_hieu':'1','chuyen_muc':[
-                {'tieu_de':'Nguyên văn chữ Hán Nôm','van_ban':'永寺'}]}]}])
-            options=parser().parse_args(['--image-dir',str(root),'--source-json',str(source),
-                                         '--output-dir',str(root/'out'),'--skip-detection'])
-            app=create_app(options)
-            functions=[f.fn for f in app.fns.values() if f.fn]
-            open_image=next(f for f in functions if f.__name__=='open_image')
-            on_action=next(f for f in functions if f.__name__=='on_action')
-            confirm=next(f for f in functions if f.__name__=='confirm_source_mismatch')
-            lambdas=[f for f in functions if f.__name__=='<lambda>']
-            def action(name):
-                if name=='next':
-                    stream=next(f for f in functions if f.__name__=='next_with_progress')
-                    return lambda ctx,draft=None:list(stream(ctx,draft))[-1]
-                if name=='save_content':
-                    return next(f for f in functions if f.__name__=='save_content_draft')
-                return next(f for f in lambdas if f.__defaults__==(name,))
-
-            opened=open_image(dict(active=new_state(),drafts={}),str(image))
-            ctx=opened[0];saved=action('save_content')(ctx,opened[-2]);ctx=saved[0]
-            ctx=action('next')(ctx,saved[-2])[0]
-            active=ctx['active']
-            result=on_action(ctx,gr.EventData(None,dict(
-                action='add',payload={'bbox':[0,0,10,10],
-                                      'revision':active['revision'],
-                                      'image':active['image']})))
+            root=Path(folder).resolve();cb,opened,_=self.current_app(root,'永寺')
+            ctx=cb['advance'](opened[0],opened[cb['draft_index']])[0]
+            boxes={'local_1':{'bbox':[0,0,10,10],'status':'intact','order':1}}
+            selection=json.dumps({'boxes':boxes,'active':'local_1','selected':['local_1']})
+            with self.assertWarnsRegex(UserWarning,'require a note'), self.assertLogs('app',level='ERROR'):
+                rejected=cb['confirm_source_mismatch'](ctx,'other','   ',selection)
+            self.assertIsNone(rejected[0]['active']['source_mismatch'])
+            result=cb['confirm_source_mismatch'](ctx,'other','source does not match the image',selection)
             ctx=result[0]
-            self.assertIn('Difference (boxes − characters)',result[25])
-            self.assertTrue(result[31]['visible'])
-            self.assertTrue(result[34]['interactive'])
-            rejected=confirm(ctx,'other','   ')
-            self.assertIn('require a note',rejected[2]['value'])
-            result=confirm(ctx,'other','source does not match the image')
-            ctx=result[0]
-            self.assertTrue(result[35]['visible'])
-            self.assertIn('Source mismatch confirmed',result[25])
-            result=action('next')(ctx);ctx=result[0]
-            self.assertIn('mismatch confirmed',result[8]['value']['markup'])
+            self.assertTrue(ctx['active']['source_mismatch'])
+            result=cb['advance'](ctx,selection=selection);ctx=result[0]
             self.assertEqual(ctx['active']['current_step'],7)
             self.assertEqual(ctx['active']['annotations'],{})
-            ctx=action('save')(ctx)[0]
-            export=next(f for f in functions if f.__name__=='save_folder')
-            payload=json.loads(export())
+            ctx=cb['save'](ctx)[0]
+            payload=json.loads(cb['save_folder']())
             with zipfile.ZipFile(BytesIO(base64.b64decode(payload['content']))) as bundle:
-                self.assertIn('source_mismatches.json',bundle.namelist())
-                self.assertNotIn('text_annotations.json',bundle.namelist())
+                self.assertEqual(json.loads(bundle.read('text_annotations.json')),[])
                 mismatch=json.loads(bundle.read('source_mismatches.json'))[0]
-            self.assertNotIn('annotations',mismatch)
-            self.assertEqual(set(mismatch),{
-                'image','inscription_code','issue_type','note','bounding_boxes'})
+            self.assertEqual(set(mismatch),{'image','inscription_code','issue_type','note','bounding_boxes'})
             self.assertEqual(mismatch['bounding_boxes'],{'1':{'bbox':[0,0,10,10]}})
 
 

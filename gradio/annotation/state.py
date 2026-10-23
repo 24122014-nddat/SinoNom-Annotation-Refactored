@@ -168,6 +168,8 @@ def initialize_alignment(state, ordered_uids=None):
     tokens_by_region = {uid: previous_tokens[box_id]
                         for uid, box_id in previous_mapping.items() if box_id in previous_tokens}
     ids = list(range(1, len(ordered_uids) + 1))
+    for uid, box_id in zip(ordered_uids, ids):
+        state['regions'][uid]['order'] = box_id
     state['box_id_by_region'] = {uid: str(box_id) for uid, box_id in zip(ordered_uids, ids)}
     state['region_uid_by_box_id'] = {str(box_id): uid for uid, box_id in zip(ordered_uids, ids)}
     state['bounding_boxes'] = {

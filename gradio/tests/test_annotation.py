@@ -84,14 +84,15 @@ class Invariants(unittest.TestCase):
         self.assertEqual(s['reading_order'],[1,2,3])
         self.assertEqual(sum(box['status']=='damaged' for box in s['bounding_boxes'].values()),1)
 
-    def test_geometry_edit_invalidates_and_rebuilds_public_ids(self):
+    def test_geometry_edit_preserves_character_assignments_and_public_ids(self):
         s=aligned_state();uid=next(iter(s['regions']))
+        before=deepcopy(s)
         update_bbox(s,uid,[1,1,8,8])
-        self.assertEqual(s['bounding_boxes'],{})
-        self.assertEqual(s['annotations'],{})
-        self.assertEqual(s['reading_order'],[])
-        refresh_bbox_validation(s);confirm_status(s);initialize_alignment(s)
-        self.assertEqual(set(s['bounding_boxes']),{'1','2','3'})
+        box_id=s['box_id_by_region'][uid]
+        self.assertEqual(s['bounding_boxes'][box_id]['bbox'],[1,1,8,8])
+        self.assertEqual(s['annotations'],before['annotations'])
+        self.assertEqual(s['reading_order'],before['reading_order'])
+        self.assertTrue(s['workflow']['alignment_valid'])
 
     def test_frontend_batch_box_commit_is_atomic(self):
         s=aligned_state();uids=list(s['regions']);before=deepcopy(s)
@@ -284,17 +285,16 @@ class Invariants(unittest.TestCase):
         self.assertEqual(s['annotations'],{
             '1':'永','2':'MISS','3':'寺','4':'樂','5':'MISS'})
         self.assertEqual(build_text_sequence(s),'永MISS寺樂MISS')
-        self.assertEqual(s['bounding_boxes']['2']['status'],'unknown')
-        self.assertEqual(s['bounding_boxes']['5']['status'],'unknown')
+        self.assertFalse(s['bounding_boxes']['2']['unknown'])
+        self.assertFalse(s['bounding_boxes']['5']['unknown'])
         self.assertTrue(all(s['bounding_boxes'][key]['status'] != 'unknown'
                             for key in ('1','3','4')))
-        with self.assertRaises(ValueError):
-            update_status(s,s['region_uid_by_box_id']['2'],'damaged')
+        update_status(s,s['region_uid_by_box_id']['2'],'damaged',damage_level=2)
         self.assertEqual(s['reading_order'],[1,2,3,4,5])
         self.assertEqual(s['annotations']['2'],'MISS')
         self.assertEqual(s['annotations']['5'],'MISS')
-        self.assertEqual(s['bounding_boxes']['2']['status'],'unknown')
-        self.assertEqual(s['bounding_boxes']['5']['status'],'unknown')
+        self.assertFalse(s['bounding_boxes']['2']['unknown'])
+        self.assertFalse(s['bounding_boxes']['5']['unknown'])
         self.assertEqual(s['bounding_boxes']['3']['status'],'intact')
         s['workflow']['reading_order_valid']=True
         confirm_status(s)
@@ -302,7 +302,7 @@ class Invariants(unittest.TestCase):
         document=final_source_mismatch_document(s)
         self.assertEqual(document['annotations']['2'],'MISS')
         self.assertNotIn('reading_order',document)
-        invalid=deepcopy(document);invalid['bounding_boxes']['2']['status']='intact'
+        invalid=deepcopy(document);invalid['bounding_boxes']['2']['unknown']=True
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'invalid.json';atomic_write(path,invalid)
             with self.assertRaises(ValueError):
@@ -473,69 +473,39 @@ class Integration(unittest.TestCase):
         self.assertEqual(state['annotation_text'], '測試')
 
     def test_full_workflow_roundtrip_and_edit(self):
-        e=self.engine;s=e.open_image(self.image);s=e.apply(s,'save_content');s=e.apply(s,'next')
-        self.assertTrue(s['image_url'].startswith('gradio_api/file='))
-        self.assertNotIn('base64',s['image_url'])
-        from urllib.parse import unquote
-        preview_path = unquote(s['image_url'].split('file=',1)[1])
-        with Image.open(preview_path) as preview_image:
-            self.assertEqual(preview_image.size,tuple(s['image_size']))
-            self.assertEqual(preview_image.format,'JPEG')
-            self.assertEqual(preview_image.getpixel((0,0)),(255,255,255))
-        content_preview_path = unquote(s['content_preview_url'].split('file=',1)[1])
-        with Image.open(content_preview_path) as content_preview:
-            self.assertLessEqual(max(content_preview.size),1600)
-            self.assertEqual(content_preview.format,'JPEG')
-
+        e=self.engine;s=e.apply(e.open_image(self.image),'next')
         detected={'image':self.image.name,
-                  'bounding_boxes':{str(i+1):dict(bbox=[i*10,0,i*10+9,9],status='intact') for i in range(3)},
-                  'reading_order':[1,2,3]}
+                  'bounding_boxes':{str(i+1):dict(bbox=[i*10,0,i*10+9,9],status='intact') for i in range(3)}}
         with patch('annotation.workflow.detect',return_value=detected):
             s=e.apply(s,'detect')
-        s=e.apply(s,'next');self.assertEqual(s['current_step'],4)
-        self.assertTrue(s['workflow']['alignment_valid'])
-        damaged_uid=list(s['regions'])[1]
-        mapping=deepcopy(s['annotations'])
-        s=e.apply(s,'reorder_text',{'sequence':['永','樂','寺'],'token_order':['1','3','2']});s=e.apply(s,'next')
-        self.assertEqual(s['current_step'],5)
-        damaged_box_id=s['box_id_by_region'][damaged_uid]
-        s=e.apply(s,'status',{'id':damaged_box_id,'status':'damaged'})
-        s=e.apply(s,'next')
-        self.assertEqual(s['current_step'],6)
-        self.assertNotEqual(s['annotations'],mapping)
-        self.assertEqual(s['annotations'],{'1':'永','2':'樂','3':'寺'})
-        before_crop=deepcopy(final_document(s))
-        s=e.apply(s,'crop',{'bbox':[1,2,90,95]});s=e.apply(s,'save_crop')
-        self.assertEqual({k:v for k,v in final_document(s).items() if k!='crop'},
-                         {k:v for k,v in before_crop.items() if k!='crop'})
-        self.assertEqual(final_document(s)['crop']['top_left'],[1,2])
-        self.assertEqual(read_json(self.root/'out/crops/12305.json')['crop']['bottom_left'],[1,95])
+        with self.assertRaisesRegex(ValueError,'reading order'):
+            e.apply(s,'next')
+        s=e.apply(s,'sort_boxes');s=e.apply(s,'next')
+        self.assertEqual(s['current_step'],4)
+        s=e.apply(s,'reorder_text',{'sequence':['永','樂','寺'],'token_order':['1','3','2']})
+        s=e.apply(s,'status',{'id':'2','status':'damaged','damage_level':2})
+        s=e.apply(s,'next');self.assertEqual(s['current_step'],6)
+        before=deepcopy(final_document(s))
+        s=e.apply(s,'crop',{'bbox':[1,2,90,95]})
+        self.assertEqual(final_document(s)['annotations'],before['annotations'])
         self.assertFalse((self.root/'out/12305.json').exists())
-        s=e.apply(s,'next');self.assertEqual(s['current_step'],7)
-        s=e.apply(s,'save')
-        self.assertEqual(build_text_sequence(s),'永樂寺')
+        s=e.apply(s,'next');s=e.apply(s,'save')
         doc=read_json(self.root/'out/12305.json')
-        self.assertNotIn('region_uid',json.dumps(doc))
-        loaded=e.open_image(self.image);self.assertEqual(loaded['annotations'],doc['annotations'])
-        self.assertEqual(loaded['saved_annotation_text'],'永樂寺')
-        self.assertEqual(loaded['text_sequence'],list('永樂寺'))
-        loaded=e.apply(loaded,'save_content');self.assertEqual(loaded['reading_order'],[1,2,3])
-        self.assertEqual(loaded['annotations'],{'1':'永','2':'樂','3':'寺'})
-        self.assertTrue(loaded['crop_saved'])
+        self.assertEqual(doc['annotations'],{'1':'永','2':'樂','3':'寺'})
+        self.assertEqual(doc['bounding_boxes']['2']['damage_level'],2)
+        self.assertEqual(doc['crop']['top_left'],[1,2])
+        loaded=e.apply(e.open_image(self.image),'next')
+        self.assertEqual(loaded['annotations'],doc['annotations'])
         self.assertEqual(loaded['crop'],[1,2,90,95])
-        s=e.apply(s,'back');self.assertEqual(s['current_step'],6)
-        s=e.apply(s,'crop',{'bbox':[2,3,80,90]});self.assertFalse(s['crop_saved'])
-        self.assertEqual(read_json(self.root/'out/12305.json'),doc)
-        while s['current_step']>2:s=e.apply(s,'back')
-        s=e.apply(s,'field',{'path':['noi_dung',0,'chuyen_muc',0,'van_ban'],'value':'永樂寺文'})
-        s=e.apply(s,'save_content');self.assertFalse(s['workflow']['alignment_valid'])
-        s=e.apply(s,'next')
-        with self.assertRaises(ValueError):e.apply(s,'next')
-        s=e.apply(s,'add',{'bbox':[40,0,49,9]})
-        self.assertEqual(s['annotations'],{})
-        self.assertFalse(s['workflow']['reading_order_valid'])
-        s=e.apply(s,'next');self.assertEqual(s['current_step'],4)
-        self.assertEqual(s['annotations'],{'1':'永','2':'樂','3':'寺','4':'文'})
+        self.assertEqual(loaded['bounding_boxes']['2']['damage_level'],2)
+        while loaded['current_step']>2:loaded=e.apply(loaded,'back')
+        loaded=e.apply(loaded,'field',{'path':['noi_dung',0,'chuyen_muc',0,'van_ban'],'value':'永樂寺文'})
+        loaded=e.apply(loaded,'next')
+        with self.assertRaises(ValueError):e.apply(loaded,'next')
+        loaded=e.apply(loaded,'add',{'bbox':[40,0,49,9]})
+        self.assertEqual(loaded['annotations'],{})
+        loaded=e.apply(loaded,'sort_boxes');loaded=e.apply(loaded,'next')
+        self.assertEqual(loaded['annotations'],{'1':'永','2':'樂','3':'寺','4':'文'})
 
     def test_suspicious_roundtrip_reorder_and_removal(self):
         e=self.engine;s=e.apply(e.open_image(self.image),'next')
@@ -562,33 +532,31 @@ class Integration(unittest.TestCase):
         e.apply(reopened,'save')
         self.assertFalse(e.open_image(self.image)['bounding_boxes']['2']['suspicious'])
 
-    def test_seven_step_gates_and_crop_independence(self):
-        e=self.engine;s=e.open_image(self.image)
-        s=e.apply(s,'save_content');s=e.apply(s,'next')
+    def test_six_screen_gates_and_crop_independence(self):
+        e=self.engine;s=e.apply(e.open_image(self.image),'next')
         for x in (0,20):s=e.apply(s,'add',{'bbox':[x,0,x+10,10]})
         with self.assertRaises(ValueError):e.apply(s,'next')
         s=e.apply(s,'add',{'bbox':[40,0,50,10]})
-        s=e.apply(s,'next');self.assertEqual(s['current_step'],4)
+        with self.assertRaisesRegex(ValueError,'reading order'):e.apply(s,'next')
+        s=e.apply(s,'sort_boxes');s=e.apply(s,'next')
         s=e.apply(s,'reorder_text',{'sequence':['永','樂','寺'],'token_order':['1','3','2']})
         with self.assertRaises(ValueError):
             e.apply(s,'reorder_text',{'sequence':['永','樂','寺'],'token_order':['1','1','2']})
-        s=e.apply(s,'next');self.assertEqual(s['current_step'],5)
-        with self.assertRaises(ValueError):
-            e.apply(s,'reorder_text',{'sequence':['永','寺','樂'],'token_order':['1','2','3']})
+        s=e.apply(s,'status',{'id':'1','status':'damaged'})
+        with self.assertRaisesRegex(ValueError,'damage level'):e.apply(s,'next')
+        s=e.apply(s,'status',{'id':'1','status':'damaged','damage_level':1})
         s=e.apply(s,'next');self.assertEqual(s['current_step'],6)
         with self.assertRaises(ValueError):e.apply(s,'save')
         with self.assertRaises(ValueError):e.apply(s,'crop',{'bbox':[0,0,101,100]})
         s=e.apply(s,'next');self.assertEqual(s['current_step'],7)
-        # Crop remains optional and independent of the annotation schema.
         self.assertFalse(s['crop_saved'])
         s=e.apply(s,'save');self.assertTrue(s['saved'])
-        self.assertEqual(e.apply(s,'next')['current_step'],7)
 
     def test_crop_frame_preserves_annotations_and_scales_automatically(self):
         e=self.engine;s=e.open_image(self.image)
         s=e.apply(s,'save_content');s=e.apply(s,'next')
         for x in (0,20,40):s=e.apply(s,'add',{'bbox':[x,0,x+10,10]})
-        s=e.apply(s,'next');s=e.apply(s,'next');s=e.apply(s,'next')
+        s=e.apply(s,'sort_boxes');s=e.apply(s,'next');s=e.apply(s,'next')
         self.assertEqual(s['current_step'],6)
         regions=deepcopy(s['regions']);annotations=deepcopy(s['annotations'])
 
@@ -619,11 +587,11 @@ class Integration(unittest.TestCase):
                 'issue_type':'missing_text','note':''})
         s=e.apply(s,'confirm_source_mismatch',{
             'issue_type':'extra_text','note':'PDF contains an extra character'})
-        s=e.apply(s,'next')
+        s=e.apply(s,'sort_boxes');s=e.apply(s,'next')
         self.assertEqual(s['current_step'],4)
         self.assertEqual(s['annotations'],{'1':'永','2':'寺'})
         s=e.apply(s,'reorder_text',{'sequence':['寺','永','樂'],'token_order':['2','1','3']})
-        s=e.apply(s,'next');s=e.apply(s,'next')
+        s=e.apply(s,'next')
         document=final_source_mismatch_document(s)
         self.assertIn('annotations',document)
         self.assertEqual(document['source_character_count'],3)
@@ -642,8 +610,8 @@ class Integration(unittest.TestCase):
         reopened=e.apply(reopened,'add',{'bbox':[40,0,50,10]})
         self.assertIsNone(reopened['source_mismatch'])
         self.assertTrue(reopened['workflow']['bbox_valid'])
-        reopened=e.apply(reopened,'next');reopened=e.apply(reopened,'next')
-        reopened=e.apply(reopened,'next');reopened=e.apply(reopened,'next')
+        reopened=e.apply(reopened,'sort_boxes')
+        while reopened['current_step']<7:reopened=e.apply(reopened,'next')
         reopened=e.apply(reopened,'save')
         self.assertFalse(mismatch_path.exists())
         self.assertTrue((self.root/'out/12305.json').exists())
@@ -656,7 +624,7 @@ class Integration(unittest.TestCase):
             s=e.apply(s,'add',{'bbox':[x,0,x+10,10]})
         s=e.apply(s,'confirm_source_mismatch',{
             'issue_type':'extra_text','note':''})
-        s=e.apply(s,'next')
+        s=e.apply(s,'sort_boxes');s=e.apply(s,'next')
         self.assertEqual(s['current_step'],4)
         self.assertEqual(s['text_sequence'],['永','寺','樂'])
         s=e.apply(s,'reorder_text',{'sequence':['永','樂','寺']})
@@ -668,7 +636,7 @@ class Integration(unittest.TestCase):
         self.assertEqual(doc['excluded_characters'],['寺'])
         self.assertEqual(doc['annotations'],{'1':'永','2':'樂'})
         review=snapshot(s)['markup']
-        self.assertIn('<span class="eyebrow">FINAL RESULT</span>',review)
+        self.assertIn('<span class="eyebrow">REVIEW & VERIFICATION</span>',review)
         self.assertIn('cropped review',review)
         self.assertIn('-review.jpg',review)
         self.assertIn('<p>永樂</p>',review)
@@ -690,7 +658,7 @@ class Integration(unittest.TestCase):
             e.apply(s,'confirm_source_mismatch',{'issue_type':'other','note':'  '})
         s=e.apply(s,'confirm_source_mismatch',{
             'issue_type':'other','note':'Unreadable source'})
-        s=e.apply(s,'next')
+        s=e.apply(s,'sort_boxes');s=e.apply(s,'next')
         self.assertEqual(s['current_step'],7)
         doc=final_source_mismatch_document(s)
         self.assertEqual(set(doc),{

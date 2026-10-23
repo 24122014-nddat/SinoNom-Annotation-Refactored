@@ -14,7 +14,7 @@ from .state import (new_state, set_verified_content, refresh_bbox_validation,
                     initialize_alignment, require, invalidate,
                     source_mismatch_confirmed)
 from .text_extraction import (annotation_text, edit_content_field,
-                              complete_content_record,
+                              complete_content_record, CONTENT_LOCK,
                               content_fields, content_document, save_content_document,
                               validate_content_document,
                               normalize_content_titles, normalize_metadata_fields)
@@ -25,7 +25,7 @@ from .status import (update_status, replace_statuses, confirm_status,
 from .reading_order import (update_text_sequence,
                             update_text_tokens,
                             token_id_for_box, validate_reading_order)
-from .io import (atomic_write, final_document,
+from .io import (atomic_write, rollback_saved_files, final_document,
                  final_source_mismatch_document, load_annotation,
                  load_source_mismatch, read_json, save_annotation,
                  save_source_mismatch,
@@ -79,7 +79,7 @@ def _load_regions(state, document):
     state['region_uid_by_box_id'] = {}
     for box_id, box in document['bounding_boxes'].items():
         uid = uuid4().hex
-        state['regions'][uid] = deepcopy(box)
+        state['regions'][uid] = dict(deepcopy(box), order=int(box_id))
         state['box_id_by_region'][uid] = box_id
         state['region_uid_by_box_id'][box_id] = uid
     state['bounding_boxes'] = deepcopy(document['bounding_boxes'])
@@ -291,8 +291,10 @@ class Workflow:
             s = original.copy()
         elif action in ('add', 'update', 'commit_boxes', 'delete', 'detect'):
             s = original.copy()
-            s['regions'] = deepcopy(original['regions'])
-            s['workflow'] = original['workflow'].copy()
+            for key in ('regions', 'workflow', 'bounding_boxes', 'annotations',
+                        'reading_order', 'box_id_by_region', 'region_uid_by_box_id',
+                        'source_mismatch'):
+                s[key] = deepcopy(original[key])
         else:
             s = deepcopy(original)
         payload = payload or {}
@@ -333,7 +335,10 @@ class Workflow:
                 s['source_mismatch'] = None
             # Exact restore is allowed only with matching source AND document fingerprints.
             meta = s.pop('loaded_meta', None)
-            if meta and meta.get('text_hash') == fingerprint(text) and 'loaded_document' in s:
+            restore_loaded = (
+                text == annotation_text(s['source_baseline'], s['code'], self.annotation_title)
+                and (not meta or meta.get('text_hash') == fingerprint(text)))
+            if (restore_loaded and meta and 'loaded_document' in s):
                 document = deepcopy(s['loaded_document'])
                 mismatch_type = (source_mismatch_type(document)
                                  if s.get('loaded_is_mismatch') else None)
@@ -375,7 +380,7 @@ class Workflow:
                 s['workflow'].update(bbox_valid=True, alignment_valid=True)
                 synchronize_missing_statuses(s)
             s.pop('loaded_document', None)
-            if loaded_alignment:
+            if loaded_alignment and restore_loaded:
                 s['saved_alignment_document'] = loaded_alignment
                 mismatch_type = (source_mismatch_type(loaded_alignment)
                                  if s.get('loaded_is_mismatch') else None)
@@ -423,6 +428,8 @@ class Workflow:
                                 loaded_alignment['excluded_characters'])
                     s['workflow']['alignment_valid'] = True
                     synchronize_missing_statuses(s)
+            elif text_changed:
+                s.pop('saved_alignment_document', None)
             s.pop('loaded_region_uid_by_box_id', None)
             s.pop('loaded_is_mismatch', None)
             refresh_bbox_validation(s)
@@ -593,57 +600,23 @@ class Workflow:
                 refresh_bbox_validation(s)
                 if not (s['workflow']['bbox_valid'] or source_mismatch_confirmed(s)):
                     raise ValueError('Match the box and character counts or confirm a source mismatch.')
-                has_saved_alignment = bool(
-                    (s.get('saved_alignment_document') or s.get('loaded_document'))
-                    and (s.get('saved_alignment_document') or s.get('loaded_document')).get('annotations')
-                    and set((s.get('saved_alignment_document') or s.get('loaded_document'))['annotations'])
-                        == set(s['bounding_boxes'])
-                )
-                if has_saved_alignment and not s['workflow']['alignment_valid']:
-                    document = s.get('saved_alignment_document') or s['loaded_document']
-                    mismatch_type = (source_mismatch_type(document)
-                                     if 'inscription_code' in document else None)
-                    saved_values = list(document['annotations'].values())
-                    saved_text_matches = (
-                        mismatch_type == 'extra_text'
-                        and ''.join(document.get('text_sequence', [])) == s['annotation_text']
-                        or mismatch_type == 'missing_text'
-                        and ''.join(value for value in saved_values if value != 'MISS')
-                            == s['annotation_text']
-                        or mismatch_type is None and ''.join(saved_values) == s['annotation_text']
-                    )
-                    if saved_text_matches or mismatch_type is None:
-                        s['annotations'] = deepcopy(document['annotations'])
-                        s['reading_order'] = sorted(map(int, s['bounding_boxes']))
-                        s['text_sequence'] = (
-                            list(document.get('text_sequence', []))
-                            if mismatch_type == 'extra_text'
-                            else [s['annotations'][str(box_id)]
-                                  for box_id in s['reading_order']]
-                        )
-                        s['text_token_ids'] = [str(index) for index in
-                                               range(1, len(s['text_sequence']) + 1)]
-                        s['workflow']['alignment_valid'] = True
-                        s.pop('saved_alignment_document', None)
+                orders = [box.get('order') for box in s['regions'].values()]
+                n = len(orders)
+                integers = [value for value in orders if type(value) is int and value >= 1]
+                if not n or len(integers) != n or sorted(integers) != list(range(1, n + 1)):
+                    missing = sorted(set(range(1, n + 1)) - set(integers))
+                    duplicates = sorted({value for value in integers if integers.count(value) > 1})
+                    details = [f'Expected reading order 1–{n}.']
+                    if any(value is None for value in orders):
+                        details.append(f'Unassigned boxes: {sum(value is None for value in orders)}.')
+                    if missing:
+                        details.append('Missing: ' + ', '.join(map(str, missing)) + '.')
+                    if duplicates:
+                        details.append('Duplicate: ' + ', '.join(map(str, duplicates)) + '.')
+                    raise ValueError(' '.join(details))
                 if not s['workflow']['alignment_valid']:
-                    mapped = set(s.get('box_id_by_region', {}))
-                    n = len(s['regions'])
-                    if n > 0 and set(s['regions']).issubset(mapped) and len(mapped) == n:
-                        s['workflow']['alignment_valid'] = True
-                    else:
-                        orders=[box.get('order') for box in s['regions'].values()]
-                        integers=[value for value in orders
-                                  if isinstance(value,int) and not isinstance(value,bool)
-                                  and value >= 1]
-                        missing=sorted(set(range(1,n+1))-set(integers))
-                        duplicates=sorted({value for value in integers
-                                           if integers.count(value)>1})
-                        details=[f'Expected reading order 1–{n}.']
-                        if any(value is None for value in orders):
-                            details.append(f'Unassigned boxes: {sum(value is None for value in orders)}.')
-                        if missing:details.append('Missing: '+', '.join(map(str,missing))+'.')
-                        if duplicates:details.append('Duplicate: '+', '.join(map(str,duplicates))+'.')
-                        raise ValueError(' '.join(details))
+                    initialize_alignment(s, ordered_uids=sorted(
+                        s['regions'], key=lambda uid: s['regions'][uid]['order']))
                 if (source_mismatch_confirmed(s)
                         and s['source_mismatch']['issue_type'] == 'other'):
                     s['current_step'] = 7
@@ -681,16 +654,24 @@ class Workflow:
             content_doc = content_document(
                 s['image'], s['code'], s['verified_content'] or s['draft_content'],
                 self.content_titles, self.metadata_fields)
-            save_content_document(content_doc, self.output, self.verification_titles)
-            path = (save_source_mismatch(s, self.output) if mismatch
-                    else save_annotation(s, self.output))
             document = (final_source_mismatch_document(s) if mismatch else final_document(s))
-            meta_root = self.output / '.state' / ('source_mismatches' if mismatch else '')
-            atomic_write(meta_root / path.name,
-                         dict(text_hash=fingerprint(s['annotation_text']),
-                              document_hash=fingerprint(json.dumps(document, sort_keys=True, ensure_ascii=False))))
-            stale_meta = self.output / '.state' / ('' if mismatch else 'source_mismatches') / path.name
-            stale_meta.unlink(missing_ok=True)
+            filename = Path(s['image']).stem + '.json'
+            normal_path = self.output / filename
+            mismatch_path = self.output / 'source_mismatches' / filename
+            normal_meta = self.output / '.state' / filename
+            mismatch_meta = self.output / '.state' / 'source_mismatches' / filename
+            # Sessions share one content registry. Roll back annotation, registry,
+            # and sidecars together if a later write fails.
+            with CONTENT_LOCK, rollback_saved_files([
+                    self.output / '.state' / 'content.json', normal_path,
+                    mismatch_path, normal_meta, mismatch_meta]):
+                save_content_document(content_doc, self.output, self.verification_titles)
+                path = (save_source_mismatch(s, self.output) if mismatch
+                        else save_annotation(s, self.output))
+                atomic_write(mismatch_meta if mismatch else normal_meta,
+                             dict(text_hash=fingerprint(s['annotation_text']),
+                                  document_hash=fingerprint(json.dumps(document, sort_keys=True, ensure_ascii=False))))
+                (normal_meta if mismatch else mismatch_meta).unlink(missing_ok=True)
             s['saved'] = True
             s['crop_saved'] = True
             log.info('Saved annotation %s', path)

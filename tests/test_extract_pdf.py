@@ -129,7 +129,7 @@ class ParserTests(unittest.TestCase):
             line("Tóm tắt"),
         ]
 
-        records, warnings = parse_records(source, config())
+        records, warnings, issues = parse_records_with_issues(source, config())
 
         self.assertEqual(1, len(records))
         record = records[0]
@@ -150,6 +150,8 @@ class ParserTests(unittest.TestCase):
             "\n".join(warnings),
         )
 
+        self.assertTrue(any("<4351>" in error for issue in issues for error in issue["loi"]))
+
     def test_identifier_values_accept_slash_separated_numbers_and_prefixes(self) -> None:
         source = [
             line("VĂN BIA SỐ 1"),
@@ -159,6 +161,9 @@ class ParserTests(unittest.TestCase):
             line("Kí hiệu VNCHN: 8460/8461; N°12940/12941"),
             line("Nguyên văn chữ Hán Nôm:"),
             line("<8460> Mặt thứ nhất"),
+            line("<8461> Mặt thứ hai"),
+            line("<12940> Mặt thứ ba"),
+            line("<12941> Mặt thứ tư"),
         ]
 
         records, _ = parse_records(source, config())
@@ -200,6 +205,7 @@ class ParserTests(unittest.TestCase):
             line("Niên đại: C"),
             line("Kí hiệu VNCHN: <10>"),
             line("Nguyên văn chữ Hán Nôm:"),
+            line("<10> Nội dung trong metadata", page=7),
             line("<11> Nội dung ngoài metadata", page=7),
         ]
 

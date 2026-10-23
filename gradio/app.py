@@ -1064,14 +1064,16 @@ def create_app(options):
             updated=engine.apply(ctx['active'],'statuses',{'statuses':statuses, 'unknowns':unknowns_map, 'unavailable_fonts':fonts_map, 'expert_predictions':experts_map, 'suspiciouses':suspicious_map, 'damage_levels':levels_map})
             return dict(ctx,active=updated)
         def commit_status_order(ctx, selection, status_value='intact'):
-            candidate = commit_statuses(ctx, selection, status_value)
+            candidate = ctx
             text_sequence, token_order = frontend_text_sequence(selection)
             if text_sequence is not None and (text_sequence or candidate['active']['annotations']):
                 updated = engine.apply(candidate['active'], 'reorder_text', {
                     'sequence': text_sequence, 'token_order': token_order,
                 })
                 candidate = dict(candidate, active=updated)
-            return candidate
+            # Browser flags describe the submitted assignment. Normalize them
+            # against that sequence, rather than the preceding token positions.
+            return commit_statuses(candidate, selection, status_value)
 
         def apply_status_changes(ctx, selection, status_value):
             try:
