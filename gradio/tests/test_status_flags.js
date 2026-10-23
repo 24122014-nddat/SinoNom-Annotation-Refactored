@@ -139,3 +139,72 @@ assert.equal(box.damage_level,null);
 run("radio('#damage-level-radio input','3'); radio('#unknown-radio input','True')");
 assert.equal(box.damage_level,3);
 console.log('PASS: damage level draft changes, intact reset, and independent unknown flag');
+
+// Mandatory placeholder flags must also be locked in the actual sidebar controls.
+const policyRadios = Object.fromEntries([
+  ['#status-radio', ['intact', 'damaged']],
+  ['#unknown-radio', ['False', 'True']],
+  ['#unavailable-font-radio', ['False', 'True']],
+  ['#expert-prediction-radio', ['False', 'True']],
+  ['#suspicious-toggle', ['False', 'True']],
+  ['#damage-level-radio', ['Unselected', '1', '2', '3']],
+].map(([selector, values]) => {
+  const radios = values.map(value => ({value, checked: false, disabled: false,
+    label: new Node(), closest() { return this.label; },
+    click() { if (!this.disabled) { radios.forEach(radio => { radio.checked = radio === this; }); } },
+  }));
+  return [selector, radios];
+}));
+const policyBox = {bbox: [0, 0, 10, 10], status: 'damaged', damage_level: 2,
+  unknown: true, unavailable_font: false, expert_prediction: false, suspicious: false};
+const policyChip = new Node(); policyChip.dataset = {character: '□', tokenId: '1'};
+const unknownControl = new Node();
+const policyRoot = {
+  querySelectorAll(selector) {
+    return selector.split(',').flatMap(part => policyRadios[part.trim().replace(/ input$/, '')] || []);
+  },
+  querySelector(selector) {
+    if (selector === '#unknown-radio') return unknownControl;
+    const match = selector.match(/^(#[\w-]+) input\[value="([^"]+)"\]$/);
+    return match ? policyRadios[match[1]]?.find(input => input.value === match[2]) : null;
+  },
+};
+const policyContext = {
+  props: {value: {step: 4}}, localBoxes: {'1': policyBox}, activeBoxId: '1', activeTokenId: null,
+  selectedIds: new Set(['1']), localTextSequence: ['□'], root: policyRoot,
+  syncingStatusControl: false, setInputValue: () => {}, updateValidationSummary: () => {},
+  serializeLocalBoxes: () => ({'1': policyBox}), renderLocalStatus: () => {},
+  element: {querySelector: selector => selector.startsWith('[data-order-chip]') ? policyChip : null,
+    querySelectorAll: () => []},
+};
+vm.createContext(policyContext);
+vm.runInContext(extract('const syncExternalControls =', 'const renderLocalStatus ='), policyContext);
+const syncPolicy = () => vm.runInContext('syncExternalControls()', policyContext);
+const isLocked = selector => policyRadios[selector].every(input => input.disabled);
+const checkedValue = selector => policyRadios[selector].find(input => input.checked)?.value;
+syncPolicy();
+for (const selector of ['#status-radio', '#unknown-radio', '#unavailable-font-radio', '#expert-prediction-radio', '#suspicious-toggle']) {
+  assert.equal(isLocked(selector), true, `□ must lock ${selector}`);
+}
+assert.equal(checkedValue('#unknown-radio'), 'True');
+assert.equal(checkedValue('#status-radio'), 'damaged');
+assert.equal(isLocked('#damage-level-radio'), false);
+policyChip.dataset.character = '@';
+Object.assign(policyBox, {status: 'intact', unknown: false, unavailable_font: true});
+syncPolicy();
+assert.equal(isLocked('#unavailable-font-radio'), true);
+assert.equal(checkedValue('#unavailable-font-radio'), 'True');
+assert.equal(isLocked('#unknown-radio'), true);
+assert.equal(checkedValue('#unknown-radio'), 'False');
+assert.equal(isLocked('#status-radio'), false);
+assert.equal(isLocked('#expert-prediction-radio'), false);
+policyChip.dataset.character = '永';
+Object.assign(policyBox, {status: 'damaged', unknown: false, unavailable_font: false});
+syncPolicy();
+for (const selector of ['#status-radio', '#unknown-radio', '#unavailable-font-radio', '#expert-prediction-radio', '#suspicious-toggle']) {
+  assert.equal(isLocked(selector), false, `Normal character must unlock ${selector}`);
+}
+policyContext.activeBoxId = null;
+syncPolicy();
+assert.equal(Object.keys(policyRadios).every(isLocked), true);
+console.log('PASS: □/@ mandatory sidebar flags stay locked; normal characters unlock; no-selection is safe');

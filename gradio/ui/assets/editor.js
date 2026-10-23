@@ -227,13 +227,18 @@ const syncExternalControls = () => {
   if (board) board.dataset.localBoxesSnapshot = serializedSnapshot;
   setInputValue('#selection-bridge', serializedSnapshot);
   const active = activeBoxId && localBoxes[activeBoxId];
+  if (props.value.step === 4 && !active) {
+    root.querySelectorAll('#status-radio input, #unknown-radio input, #unavailable-font-radio input, #expert-prediction-radio input, #suspicious-toggle input, #damage-level-radio input')
+      .forEach(input => { input.disabled = true; });
+    return;
+  }
   if (props.value.step === 4) {
     const chip = activeBoxId && element.querySelector(
       `[data-order-chip][data-assigned-box-id="${activeBoxId}"]`);
     activeTokenId = chip?.dataset.tokenId || null;
     const isMissing = Boolean(chip?.classList.contains('missing') || chip?.dataset.character === '[MISS]');
     const isExcluded = Boolean(chip?.classList.contains('excluded'));
-    const allowed = Boolean(chip && !isMissing && !isExcluded && active);
+    const allowed = Boolean(chip && !isMissing && !isExcluded && active && chip.dataset.character !== '□');
     const target = allowed && active.suspicious ? 'True' : 'False';
     root.querySelectorAll('#suspicious-toggle input').forEach(input => {
       if (input.value === target && !input.checked) {
@@ -282,10 +287,16 @@ const syncExternalControls = () => {
   if (props.value.step === 4) {
     const statusRadio = root.querySelector(`#status-radio input[value="${active.status}"]`);
     if (statusRadio && !statusRadio.checked) {
+      statusRadio.disabled = false;
       syncingStatusControl = true;
       try { statusRadio.click(); } finally { syncingStatusControl = false; }
     }
     const activeChip = activeBoxId && element.querySelector(`[data-order-chip][data-assigned-box-id="${activeBoxId}"]`);
+    const isUnknownPlaceholder = activeChip?.dataset.character === '□';
+    const isFontPlaceholder = activeChip?.dataset.character === '@';
+    root.querySelectorAll('#status-radio input').forEach(input => {
+      input.disabled = isUnknownPlaceholder;
+    });
     const isMissing = Boolean(activeChip?.classList.contains('missing') || activeChip?.dataset.character === '[MISS]');
     if (isMissing && active.unknown) {
       active.unknown = false;
@@ -296,10 +307,11 @@ const syncExternalControls = () => {
       root.querySelectorAll(`${selector} input`).forEach(input => {
         const target = active[flag] ? 'True' : 'False';
         if (input.value === target && !input.checked) {
+          input.disabled = false;
           syncingStatusControl = true;
           try { input.click(); } finally { syncingStatusControl = false; }
         }
-        input.disabled = isMissing;
+        input.disabled = isMissing || isUnknownPlaceholder || (flag === 'unavailable_font' && isFontPlaceholder);
       });
     }
     const unknownRadioInputs = root.querySelectorAll('#unknown-radio input');
@@ -321,8 +333,8 @@ const syncExternalControls = () => {
         label.style.pointerEvents = allowed ? 'auto' : 'none';
       }
     });
-    const canBeUnknown = isDamaged && !isMissing;
-    const targetValue = canBeUnknown && active.unknown ? 'True' : 'False';
+    const canBeUnknown = isDamaged && !isMissing && !isUnknownPlaceholder && !isFontPlaceholder;
+    const targetValue = !isMissing && active.unknown ? 'True' : 'False';
     if (unknownContainer) {
       unknownContainer.classList.toggle('disabled', !canBeUnknown);
       unknownContainer.style.pointerEvents = canBeUnknown ? 'auto' : 'none';
