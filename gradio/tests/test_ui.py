@@ -508,7 +508,7 @@ class GradioCallbacks(unittest.TestCase):
         self.assertIn("field=gr.Dropdown(label='Section', filterable=False)",app_source)
         self.assertIn('fn=None,inputs=[field,content_bridge],outputs=[field_value],queue=False,',app_source)
         self.assertIn('fn=None,inputs=[field,field_value,content_bridge],',app_source)
-        self.assertIn('save_content_draft,[session,content_bridge]',app_source)
+        self.assertIn('def commit_frontend_content(ctx,draft):',app_source)
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder).resolve()
             image=root/'12306.png';Image.new('RGB',(100,100),'white').save(image)
@@ -538,7 +538,11 @@ class GradioCallbacks(unittest.TestCase):
             app=create_app(options)
             functions=[f.fn for f in app.fns.values() if f.fn]
             open_image=next(f for f in functions if f.__name__=='open_image')
-            save=next(f for f in functions if f.__name__=='save_content_draft')
+            advance_stream=next(f for f in functions if f.__name__=='next_with_progress')
+            def save(ctx, draft):
+                ctx=deepcopy(ctx)
+                ctx['active']['current_step']=2
+                return list(advance_stream(ctx,draft))[-1]
             result=open_image(dict(active=new_state(),drafts={}),str(image))
             ctx=result[0];choices=result[4]['choices']
             self.assertEqual(
@@ -552,7 +556,7 @@ class GradioCallbacks(unittest.TestCase):
             choice_by_label=dict(choices)
             metadata_path=choice_by_label['Tên bia']
             selected=choice_by_label['Dịch nghĩa']
-            browser_draft=json.loads(result[-2])
+            browser_draft=json.loads(result[44])
             browser_draft[metadata_path]['value']='Tên bia đã sửa'
             browser_draft[selected]['value']='Bản dịch\nđã sửa'
             draft_json=json.dumps(browser_draft,ensure_ascii=False)
@@ -560,22 +564,10 @@ class GradioCallbacks(unittest.TestCase):
             expected=deepcopy(original)
             expected[0]['ten_bia']='Tên bia đã sửa'
             expected[0]['noi_dung'][1]['chuyen_muc'][2]['van_ban']='Bản dịch\nđã sửa'
-            self.assertEqual(json.loads(source.read_text()),expected)
+            self.assertEqual(json.loads(source.read_text()),original)
+            self.assertEqual(ctx['active']['draft_content'],expected[0])
             self.assertEqual(ctx['active']['annotation_text'],'永寺樂')
-            content_doc=json.loads((root/'out/.state/content.json').read_text())[0]
-            self.assertEqual(content_doc['image'],'12306.png')
-            self.assertEqual(content_doc['inscription_code'],'12306')
-            self.assertEqual(content_doc['content']['Tên bia'],'Tên bia đã sửa')
-            self.assertEqual(content_doc['content']['Địa điểm'],'Hà Nội')
-            self.assertEqual(content_doc['content']['Niên đại'],'Cảnh Hưng')
-            self.assertEqual(content_doc['content']['Dịch nghĩa'],'Bản dịch\nđã sửa')
-            export=next(f for f in functions if f.__name__=='save_folder')
-            payload=json.loads(export())
-            self.assertEqual(payload['name'],'annotations.zip')
-            self.assertTrue((root/'out/annotations.zip').is_file())
-            with zipfile.ZipFile(BytesIO(base64.b64decode(payload['content']))) as bundle:
-                self.assertNotIn('text_annotations.json',bundle.namelist())
-                self.assertEqual(json.loads(bundle.read('inscription_content.json')),[content_doc])
+            self.assertFalse((root/'out/.state/content.json').exists())
             # A submitted path cannot edit unconfigured metadata, headings,
             # other faces, or other sections.
             for path in (['extra','keep'],['noi_dung',0,'chuyen_muc',0,'van_ban'],
@@ -584,11 +576,12 @@ class GradioCallbacks(unittest.TestCase):
                 tampered=deepcopy(browser_draft)
                 tampered[json.dumps(path,ensure_ascii=False)]={
                     'title':'Không hợp lệ','path':path,'value':'Không được ghi'}
-                rejected=save(ctx,json.dumps(tampered,ensure_ascii=False))
-                self.assertIn('incomplete or invalid',rejected[2]['value'])
+                with self.assertWarnsRegex(UserWarning, 'incomplete or invalid'):
+                    rejected=save(ctx,json.dumps(tampered,ensure_ascii=False))
+                self.assertEqual(rejected[0]['active']['current_step'],2)
             self.assertEqual([field['title'] for field in content_fields(record,'12305')],[titles[0]])
 
-    def test_next_saves_current_editor_and_stays_on_save_failure(self):
+    def test_next_verifies_current_editor_and_stays_on_verification_failure(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder).resolve()
             image=root/'12305.png';Image.new('RGB',(100,100),'white').save(image)
@@ -605,19 +598,18 @@ class GradioCallbacks(unittest.TestCase):
                 return list(advance_stream(*args))[-1]
             opened=open_image(dict(active=new_state(),drafts={}),str(image))
             ctx=opened[0];path=opened[4]['choices'][0][1]
-            draft=json.loads(opened[-2]);draft[path]['value']='永\n寺'
+            draft=json.loads(opened[44]);draft[path]['value']='永\n寺'
             draft=json.dumps(draft,ensure_ascii=False)
-            with patch('annotation.workflow.save_source_content',side_effect=OSError('write failed')), self.assertLogs('app',level='ERROR'):
+            with patch('annotation.workflow.set_verified_content',side_effect=OSError('verification failed')), self.assertLogs('app',level='ERROR'), self.assertWarnsRegex(UserWarning, 'verification failed'):
                 failed=advance(ctx,draft)
             self.assertEqual(failed[0]['active']['current_step'],2)
-            self.assertIn('write failed',failed[2]['value'])
-            self.assertEqual(content_fields(failed[0]['active']['draft_content'],'12305')[0]['value'],'永\n寺')
+            self.assertEqual(failed[4], gr.skip())
+            self.assertEqual(failed[5], gr.skip())
             result=advance(failed[0],draft)
             self.assertEqual(result[0]['active']['current_step'],3)
             self.assertTrue(result[0]['active']['workflow']['content_verified'])
-            self.assertEqual(json.loads(source.read_text())[0]['noi_dung'][0]['chuyen_muc'][0]['van_ban'],'永\n寺')
-            saved=json.loads((root/'out/.state/content.json').read_text())
-            self.assertEqual(saved[0]['content']['Nguyên văn chữ Hán Nôm'],'永\n寺')
+            self.assertEqual(json.loads(source.read_text())[0]['noi_dung'][0]['chuyen_muc'][0]['van_ban'],'永')
+            self.assertFalse((root/'out/.state/content.json').exists())
 
     def test_skip_detection_never_calls_model(self):
         with tempfile.TemporaryDirectory() as folder:

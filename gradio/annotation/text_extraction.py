@@ -37,11 +37,7 @@ def normalize_metadata_fields(fields):
     return tuple(normalized)
 
 
-def content_fields(record, code, titles=None, metadata_fields=()):
-    """Editable text sections on the selected face, with original source paths.
-
-    Keep the full record in state/persistence. Missing sections are not invented.
-    """
+def _selected_face(record, code):
     faces = [(index, face) for index, face in enumerate(record.get('noi_dung', []))
              if str(face.get('ky_hieu')) == str(code)]
     if not faces and str(code).isdigit():
@@ -50,7 +46,33 @@ def content_fields(record, code, titles=None, metadata_fields=()):
                  if str(face.get('ky_hieu')) == norm_code]
     if len(faces) != 1:
         raise ValueError('Exactly one inscription face must match the selected image.')
-    face_index, face = faces[0]
+    return faces[0]
+
+
+def complete_content_record(record, code, titles, metadata_fields=()):
+    """Prepare editable defaults on a copy, preserving source data and face indices."""
+    result = deepcopy(record)
+    _, face = _selected_face(result, code)
+    for _, field in normalize_metadata_fields(metadata_fields):
+        if result.get(field) is None:
+            result[field] = ''
+    sections = face.setdefault('chuyen_muc', [])
+    for title in normalize_content_titles(titles):
+        matches = [section for section in sections if section.get('tieu_de') == title]
+        if not matches:
+            sections.append({'tieu_de': title, 'van_ban': ''})
+        else:
+            for section in matches:
+                if section.get('van_ban') is None:
+                    section['van_ban'] = ''
+    return result
+
+
+def content_fields(record, code, titles=None, metadata_fields=()):
+    """Editable configured fields, including defaults with stable draft paths."""
+    if titles is not None:
+        record = complete_content_record(record, code, titles, metadata_fields)
+    face_index, face = _selected_face(record, code)
     if titles is None:
         # Schema-free helper behavior for callers inspecting a raw source record.
         # The application always supplies the config-controlled title sequence.
@@ -70,7 +92,7 @@ def content_fields(record, code, titles=None, metadata_fields=()):
 
 
 def content_document(image_name, code, record, titles, metadata_fields=()):
-    """Create the stable per-image document committed by Save content."""
+    """Create the stable content document committed with Save Annotation."""
     titles = normalize_content_titles(titles)
     metadata_fields = normalize_metadata_fields(metadata_fields)
     output_titles = tuple(label for label, _ in metadata_fields) + titles
@@ -84,7 +106,7 @@ def content_document(image_name, code, record, titles, metadata_fields=()):
     return {
         'image': Path(image_name).name,
         'inscription_code': str(code),
-        'content': {title: values.get(title) for title in output_titles},
+        'content': {title: values.get(title, '') for title in output_titles},
     }
 
 
@@ -111,7 +133,7 @@ def _configured_content_document(document, titles):
     validate_content_document(
         document, document.get('image') if isinstance(document, dict) else '', None)
     result = deepcopy(document)
-    result['content'] = {title: document['content'].get(title) for title in titles}
+    result['content'] = {title: document['content'].get(title) or '' for title in titles}
     return result
 
 
@@ -119,7 +141,8 @@ def save_content_document(document, output_dir, titles):
     titles = normalize_content_titles(titles)
     validate_content_document(
         document, document.get('image') if isinstance(document, dict) else '', titles)
-    # This registry is the durable Save-all list. Save content never downloads a file.
+    document = _configured_content_document(document, titles)
+    # This registry is the durable content list committed with Save Annotation.
     path = Path(output_dir) / '.state' / 'content.json'
     with CONTENT_LOCK:
         documents = read_json(path) if path.exists() else []
@@ -150,7 +173,7 @@ def edit_content_field(record, code, path, value, titles, metadata_fields=()):
         raise ValueError('Only configured content sections of the selected inscription may be edited.')
     if not isinstance(value, str):
         raise ValueError('Section content must be a text string.')
-    return edit_field(record, path, value)
+    return edit_field(complete_content_record(record, code, titles, metadata_fields), path, value)
 
 
 def extract_source_content(image_name, source_json, annotation_title):

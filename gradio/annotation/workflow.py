@@ -14,6 +14,7 @@ from .state import (new_state, set_verified_content, refresh_bbox_validation,
                     initialize_alignment, require, invalidate,
                     source_mismatch_confirmed)
 from .text_extraction import (annotation_text, edit_content_field,
+                              complete_content_record,
                               content_fields, content_document, save_content_document,
                               validate_content_document,
                               normalize_content_titles, normalize_metadata_fields)
@@ -140,6 +141,7 @@ class Workflow:
         record = deepcopy(records[record_index])
         # Keep the same schema validation as the public extraction adapter.
         annotation_text(record, code, self.annotation_title)
+        record = complete_content_record(record, code, self.content_titles, self.metadata_fields)
         return dict(record=record, record_index=record_index, face_index=face_index, code=code)
 
     def _saved_content_for(self, image_name, code, source_record):
@@ -159,11 +161,10 @@ class Workflow:
         saved = validate_content_document(matches[0], image_name)
         restored = deepcopy(source_record)
         for field in content_fields(restored, code, self.content_titles, self.metadata_fields):
-            value = saved['content'].get(field['title'])
-            if value is not None:
-                restored = edit_content_field(
-                    restored, code, field['path'], value,
-                    self.content_titles, self.metadata_fields)
+            value = saved['content'].get(field['title']) or ''
+            restored = edit_content_field(
+                restored, code, field['path'], value,
+                self.content_titles, self.metadata_fields)
         return restored
 
     def open_image(self, path):

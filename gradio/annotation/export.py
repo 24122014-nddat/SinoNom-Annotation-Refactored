@@ -101,7 +101,7 @@ def collect_source_mismatches(images, output_dir, allow_empty=False):
 
 
 def collect_content_documents(images, output_dir, allow_empty=False, titles=None):
-    """Collect only documents explicitly committed with Save content."""
+    """Collect content committed with Save Annotation."""
     if not images:
         raise ValueError('The image folder is empty.')
     registry = Path(output_dir) / '.state' / 'content.json'
@@ -117,8 +117,11 @@ def collect_content_documents(images, output_dir, allow_empty=False, titles=None
                 document, document.get('image') if isinstance(document, dict) else '', None)
             if titles is not None:
                 document = deepcopy(document)
-                document['content'] = {title: document['content'].get(title) for title in titles}
+                document['content'] = {title: document['content'].get(title) or '' for title in titles}
                 validate_content_document(document, document['image'], titles)
+            else:
+                document = deepcopy(document)
+                document['content'] = {title: value or '' for title, value in document['content'].items()}
             if document['image'] in by_image:
                 raise ValueError('The saved-content registry contains duplicate images.')
             by_image[document['image']] = document

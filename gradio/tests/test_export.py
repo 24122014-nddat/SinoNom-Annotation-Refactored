@@ -41,34 +41,30 @@ class FolderExport(unittest.TestCase):
         s = e.apply(s, 'next')
         for x in (0, 20):
             s = e.apply(s, 'add', {'bbox': [x, 0, x + 10, 10]})
-        for _ in range(4):
+        s = e.apply(s, 'sort_boxes')
+        while s['current_step'] < 7:
             s = e.apply(s, 'next')
         return e.apply(s, 'save')
 
     def export(self):
         return collect_annotations(self.images, self.output)
 
-    def test_save_content_creates_separate_committed_object(self):
+    def test_content_is_committed_only_with_annotation(self):
         state = self.engine.open_image(self.images[0])
         state = self.engine.apply(state, 'save_content')
         registry = self.output / '.state/content.json'
+        self.assertFalse(registry.exists())
+        with self.assertRaisesRegex(ValueError, 'No content has been saved'):
+            collect_content_documents(self.images, self.output)
+        self.complete(self.images[0])
         saved = read_json(registry)[0]
         self.assertEqual(saved['image'], '1.png')
-        self.assertEqual(saved['inscription_code'], '1')
         self.assertEqual(list(saved['content']), list(self.content_titles))
-        self.assertEqual(saved['content']['Nguyên văn chữ Hán Nôm'], '永寺')
         self.assertEqual(collect_content_documents(self.images, self.output), [saved])
-        with self.assertRaisesRegex(ValueError, 'No images have been saved'):
-            self.export()
-
-        # Applying an edit changes only the draft until Save content is pressed again.
         field = content_fields(state['draft_content'], state['code'])[0]
         state = self.engine.apply(state, 'field', {'path': field['path'], 'value': '寺永'})
-        self.assertEqual(read_json(registry), [saved])
         self.engine.apply(state, 'save_content')
-        updated = read_json(registry)
-        self.assertEqual(len(updated), 1)
-        self.assertEqual(updated[0]['content']['Nguyên văn chữ Hán Nôm'], '寺永')
+        self.assertEqual(read_json(registry), [saved])
 
     def test_unsaved_draft_changes_are_excluded(self):
         first = self.complete(self.images[0])
@@ -82,30 +78,23 @@ class FolderExport(unittest.TestCase):
         self.assertEqual(docs[0]['annotations'], {'1': '永', '2': '寺'})
         self.assertEqual(read_json(self.output / '1.json')['crop']['top_left'], [0, 0])
 
-    def test_content_editor_newlines_round_trip_to_json(self):
+    def test_content_editor_newlines_round_trip_without_changing_source(self):
+        original = self.source.read_bytes()
         state = self.engine.open_image(self.images[0])
         field = content_fields(state['draft_content'], state['code'])[0]
-
-        state = self.engine.apply(
-            state, 'field', {'path': field['path'], 'value': '永\n寺'}
-        )
-        state = self.engine.apply(state, 'save_content')
-        self.assertEqual(
-            read_json(self.source)[0]['noi_dung'][0]['chuyen_muc'][0]['van_ban'],
-            '永\n寺',
-        )
-        self.assertIn('永\\n寺', self.source.read_text(encoding='utf-8'))
-
-        field = content_fields(state['draft_content'], state['code'])[0]
-        state = self.engine.apply(
-            state, 'field', {'path': field['path'], 'value': '永寺'}
-        )
-        self.engine.apply(state, 'save_content')
-        self.assertEqual(
-            read_json(self.source)[0]['noi_dung'][0]['chuyen_muc'][0]['van_ban'],
-            '永寺',
-        )
-        self.assertNotIn('永\\n寺', self.source.read_text(encoding='utf-8'))
+        state = self.engine.apply(state, 'field', {'path': field['path'], 'value': '永\n寺'})
+        state = self.engine.apply(state, 'next')
+        for x in (0, 20):
+            state = self.engine.apply(state, 'add', {'bbox': [x, 0, x + 10, 10]})
+        state = self.engine.apply(state, 'sort_boxes')
+        while state['current_step'] < 7:
+            state = self.engine.apply(state, 'next')
+        self.engine.apply(state, 'save')
+        saved = read_json(self.output / '.state/content.json')[0]
+        self.assertEqual(saved['content']['Nguyên văn chữ Hán Nôm'], '永\n寺')
+        restored = self.engine.open_image(self.images[0])
+        self.assertEqual(content_fields(restored['draft_content'], restored['code'])[0]['value'], '永\n寺')
+        self.assertEqual(self.source.read_bytes(), original)
 
     def test_only_review_saved_images_are_included(self):
         self.complete(self.images[0])
@@ -146,7 +135,8 @@ class FolderExport(unittest.TestCase):
         s=e.apply(s,'add',{'bbox':[0,0,10,10]})
         s=e.apply(s,'confirm_source_mismatch',{
             'issue_type':'other','note':'source does not match the image'})
-        for _ in range(4):
+        s=e.apply(s,'sort_boxes')
+        while s['current_step'] < 7:
             s=e.apply(s,'next')
         s=e.apply(s,'save')
 
