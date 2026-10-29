@@ -338,7 +338,7 @@ class Invariants(unittest.TestCase):
 
     def test_status_only(self):
         s=state();uid=list(s['regions'])[1];old=deepcopy(s);update_status(s,uid,'damaged')
-        old['regions'][uid]['status']='damaged'
+        old['regions'][uid].update(status='damaged', damage_level=1)
         self.assertEqual(s,old)
 
     def test_replace_statuses_updates_every_region_atomically(self):
@@ -543,9 +543,8 @@ class Integration(unittest.TestCase):
         with self.assertRaises(ValueError):
             e.apply(s,'reorder_text',{'sequence':['永','樂','寺'],'token_order':['1','1','2']})
         s=e.apply(s,'status',{'id':'1','status':'damaged'})
-        with self.assertRaisesRegex(ValueError,'damage level'):e.apply(s,'next')
-        s=e.apply(s,'status',{'id':'1','status':'damaged','damage_level':1})
         s=e.apply(s,'next');self.assertEqual(s['current_step'],6)
+        self.assertEqual(s['bounding_boxes']['1']['damage_level'],1)
         with self.assertRaises(ValueError):e.apply(s,'save')
         with self.assertRaises(ValueError):e.apply(s,'crop',{'bbox':[0,0,101,100]})
         s=e.apply(s,'next');self.assertEqual(s['current_step'],7)

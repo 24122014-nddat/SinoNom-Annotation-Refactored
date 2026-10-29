@@ -89,6 +89,7 @@ def build_detection_document(image_path: Path, result: DetectionResult) -> dict[
         str(box_id): {
             "bbox": [int(value) for value in box],
             "status": "damaged" if box_id <= damage_count else "intact",
+            **({"damage_level": 1} if box_id <= damage_count else {}),
         }
         for box_id, box in enumerate(result.fused_boxes, 1)
     }

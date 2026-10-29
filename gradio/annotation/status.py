@@ -28,10 +28,12 @@ def validate_flags(box):
 
 
 def normalize_flags(box, missing=False):
-    validate_damage_level(dict(box, status='damaged'))
-    box.setdefault('damage_level', None)
-    if box['status'] != 'damaged':
+    if box['status'] == 'damaged':
+        if box.get('damage_level') is None:
+            box['damage_level'] = 1
+    else:
         box['damage_level'] = None
+    validate_damage_level(dict(box, status='damaged'))
     if missing:
         for flag in FLAGS:
             box[flag] = False
@@ -77,9 +79,12 @@ def update_status(state, region_uid, status, unknown=None, unavailable_font=None
     if default_expert_damage and expert_prediction and not old['expert_prediction']:
         status = 'damaged'
     level = old.get('damage_level') if damage_level is _UNSET else damage_level
-    validate_damage_level({'status': 'damaged', 'damage_level': level})
-    if status != 'damaged' or old['status'] != 'damaged' and damage_level is _UNSET:
+    if status == 'damaged':
+        if level is None:
+            level = 1
+    else:
         level = None
+    validate_damage_level({'status': 'damaged', 'damage_level': level})
     box = dict(old, status=status, damage_level=level, unknown=unknown if status == 'damaged' else False,
                unavailable_font=unavailable_font, expert_prediction=expert_prediction, suspicious=suspicious)
     box_id = state['box_id_by_region'].get(region_uid)
@@ -99,6 +104,9 @@ def replace_statuses(state, statuses, unknowns=None, unavailable_fonts=None, exp
     if damage_levels is not None:
         if not isinstance(damage_levels, dict) or set(damage_levels) != set(statuses):
             raise ValueError('Damage levels must contain every region exactly once.')
+        for uid, stat in statuses.items():
+            if stat == 'damaged' and damage_levels.get(uid) is None:
+                damage_levels[uid] = 1
         for level in damage_levels.values():
             validate_damage_level({'status': 'damaged', 'damage_level': level})
     maps = (unknowns, unavailable_fonts, expert_predictions, suspiciouses)
@@ -116,13 +124,19 @@ def replace_statuses(state, statuses, unknowns=None, unavailable_fonts=None, exp
 
 
 def require_damage_levels(state):
-    """Require every damaged box to have a valid classification before committing."""
+    """Require every damaged box to have a valid classification before committing.
+    Defaults unassigned damaged boxes to level 1.
+    """
     for box in state['regions'].values():
+        if box.get('status') == 'damaged' and box.get('damage_level') is None:
+            box['damage_level'] = 1
         validate_damage_level(box)
-    missing = [state['box_id_by_region'].get(uid, uid) for uid, box in state['regions'].items()
-               if box['status'] == 'damaged' and box.get('damage_level') is None]
-    if missing:
-        raise ValueError('Select a damage level for boxes: ' + ', '.join(missing))
+    for region_uid, box_id in state.get('box_id_by_region', {}).items():
+        if region_uid in state['regions'] and box_id in state.get('bounding_boxes', {}):
+            if state['regions'][region_uid].get('status') == 'damaged':
+                lvl = state['regions'][region_uid].get('damage_level', 1)
+                state['regions'][region_uid]['damage_level'] = lvl
+                state['bounding_boxes'][box_id]['damage_level'] = lvl
 
 
 def confirm_status(state):
@@ -132,6 +146,8 @@ def confirm_status(state):
     for region_uid, box_id in state['box_id_by_region'].items():
         if state['regions'][region_uid]['status'] not in EDITABLE_STATUSES:
             raise ValueError('Every region must have a valid status.')
+        if state['regions'][region_uid]['status'] == 'damaged' and state['regions'][region_uid].get('damage_level') is None:
+            state['regions'][region_uid]['damage_level'] = 1
     require_damage_levels(state)
     # Regions are the editable source of truth. Re-copy every known status at
     # the step boundary so Reading Order, Review, and export cannot retain a
@@ -142,6 +158,7 @@ def confirm_status(state):
             is_unknown = bool(state['regions'][region_uid].get('unknown', False)) if status == 'damaged' else False
             state['bounding_boxes'][box_id]['status'] = status
             state['bounding_boxes'][box_id]['unknown'] = is_unknown
+            state['bounding_boxes'][box_id]['damage_level'] = state['regions'][region_uid].get('damage_level', 1 if status == 'damaged' else None)
             for flag in FLAGS:
                 state['bounding_boxes'][box_id][flag] = state['regions'][region_uid][flag]
     state['workflow']['status_valid'] = True

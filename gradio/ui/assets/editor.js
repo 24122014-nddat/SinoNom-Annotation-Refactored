@@ -119,7 +119,7 @@ const cloneBoxes = boxes => Object.fromEntries(Object.entries(boxes || {}).map((
   copy.unavailable_font = Boolean(box.unavailable_font);
   copy.expert_prediction = Boolean(box.expert_prediction);
   copy.suspicious = Boolean(box.suspicious);
-  copy.damage_level = box.status === 'damaged' ? (box.damage_level ?? null) : null;
+  copy.damage_level = box.status === 'damaged' ? (box.damage_level ?? 1) : null;
   copy.order = box.order ?? null;
   return [String(id), copy];
 }));
@@ -203,7 +203,7 @@ const syncExternalControls = () => {
     statuses: Object.fromEntries(Object.entries(localBoxes).map(
       ([id, box]) => [id, box.status]
     )),
-    damage_levels: Object.fromEntries(Object.entries(localBoxes).map(([id, box]) => [id, box.damage_level ?? null])),
+    damage_levels: Object.fromEntries(Object.entries(localBoxes).map(([id, box]) => [id, box.status === 'damaged' ? (box.damage_level ?? 1) : null])),
     unknowns: Object.fromEntries(Object.entries(localBoxes).map(
       ([id, box]) => [id, Boolean(box.status === 'damaged' && box.unknown)]
     )),
@@ -317,8 +317,11 @@ const syncExternalControls = () => {
     const unknownRadioInputs = root.querySelectorAll('#unknown-radio input');
     const unknownContainer = root.querySelector('#unknown-radio');
     const isDamaged = active.status === 'damaged';
+    if (isDamaged && active.damage_level == null) {
+      active.damage_level = 1;
+    }
     root.querySelectorAll('#damage-level-radio input').forEach(input => {
-      const target = String(active.damage_level ?? 'Unselected');
+      const target = String(active.damage_level ?? (isDamaged ? '1' : 'Unselected'));
       // Temporarily enable the current value while synchronizing Gradio's state.
       if (input.value === target && !input.checked) {
         input.disabled = false;
@@ -363,7 +366,11 @@ const renderLocalStatus = (id, status, unknown = null) => {
   const box = localBoxes[id];
   const group = groupFor(id);
   if (!box || !group) return;
-  if (status !== 'damaged' || box.status !== 'damaged') box.damage_level = null;
+  if (status === 'damaged') {
+    if (box.damage_level == null) box.damage_level = 1;
+  } else {
+    box.damage_level = null;
+  }
   box.status = status;
   if (unknown !== null) {
     box.unknown = Boolean(unknown && status === 'damaged');

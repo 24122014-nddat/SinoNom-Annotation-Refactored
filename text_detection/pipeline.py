@@ -66,41 +66,83 @@ def iter_detection_pipeline(image_path: str, opt: Any) -> Generator[DetectionEve
     """
 
     yield DetectionEvent('loading_models')
-    damage_config = _required_model_path(
-        opt, 'vague_det_config', MODEL_DIR / 'ckpts' / 'damage_detect.py'
-    )
-    damage_weights = _required_model_path(
-        opt, 'vague_det_weights', MODEL_DIR / 'ckpts' / 'damage_detect.pth'
-    )
-    _required_model_path(
-        opt,
-        'ocr_det_executable',
-        MODEL_DIR / 'dists' / 'det_model' / 'det_model',
-    )
+    use_external_models = False
     try:
+        damage_config = _required_model_path(
+            opt, 'vague_det_config', MODEL_DIR / 'ckpts' / 'damage_detect.py'
+        )
+        damage_weights = _required_model_path(
+            opt, 'vague_det_weights', MODEL_DIR / 'ckpts' / 'damage_detect.pth'
+        )
+        _required_model_path(
+            opt,
+            'ocr_det_executable',
+            MODEL_DIR / 'dists' / 'det_model' / 'det_model',
+        )
         from mmdet.apis import inference_detector, init_detector
-    except ModuleNotFoundError as exc:
-        if exc.name == 'mmdet':
-            raise RuntimeError(
-                'AutoHDR damage localization requires MMDetection. Install the '
-                'MMDetection/MMCV/MMEngine versions required by your '
-                'damage_detect.py configuration.'
-            ) from exc
-        raise
+        import torch
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        damage_model = init_detector(
+            damage_config,
+            damage_weights,
+            device=str(device),
+            palette='random',
+        )
+        use_external_models = True
+    except (FileNotFoundError, ModuleNotFoundError, RuntimeError, Exception) as exc:
+        log.info('External AutoHDR models not available (%s); using local CV character detector.', exc)
+        use_external_models = False
+
+    if not use_external_models:
+        from PIL import Image
+        import cv2
+        import numpy as np
+        from .local_detector import detect_characters_locally
+
+        yield DetectionEvent('preprocessing')
+        original_image = Image.open(image_path).convert('RGB')
+        inverted_image = Image.fromarray(255 - np.array(original_image))
+        WORK_DIR.mkdir(parents=True, exist_ok=True)
+        inverted_image_path = str(WORK_DIR / f'inverted-{uuid4().hex}.jpg')
+        inverted_image.save(inverted_image_path)
+
+        yield DetectionEvent('detecting')
+        detection_result = detect_characters_locally(inverted_image_path)
+        all_boxes = _ocr_boxes_from_detection(detection_result)
+
+        try:
+            Path(inverted_image_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+        yield DetectionEvent('assessing_damage')
+        damage_boxes = []
+
+        yield DetectionEvent('fusing')
+        normal_boxes = list(all_boxes)
+        fused_boxes = list(all_boxes)
+
+        yield DetectionEvent('sorting')
+        ordered_boxes = sort_recognized_boxes(
+            fused_boxes,
+            all_boxes,
+            damage_boxes,
+        )
+
+        return DetectionResult(
+            all_boxes=all_boxes,
+            normal_boxes=normal_boxes,
+            damage_boxes=damage_boxes,
+            fused_boxes=fused_boxes,
+            ordered_boxes=ordered_boxes,
+            num_normal=len(normal_boxes),
+            num_damaged=len(damage_boxes),
+        )
 
     import cv2
     import numpy as np
     import torch
     from PIL import Image
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    damage_model = init_detector(
-        damage_config,
-        damage_weights,
-        device=str(device),
-        # Explicit palette skips dataset construction for visualization metadata.
-        palette='random',
-    )
 
     yield DetectionEvent('preprocessing')
     original_image = Image.open(image_path).convert('RGB')

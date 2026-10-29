@@ -290,6 +290,10 @@ def parser():
                    help='Server port. When omitted, Gradio selects the first available port.')
     p.add_argument('--server-name', default='127.0.0.1')
     p.add_argument('--share', action='store_true', help='Create a public Gradio link.')
+    p.add_argument('--tunnel', choices=['none', 'cloudflare', 'ngrok'], default='none',
+                   help='Expose the local server to a public URL using Cloudflare or Ngrok.')
+    p.add_argument('--ngrok-token', default=None,
+                   help='Ngrok authentication token if using --tunnel ngrok.')
     return p
 
 
@@ -1040,7 +1044,7 @@ def create_app(options):
                 for uid,box in ctx['active']['regions'].items()
             }
             frontend, frontend_unknowns, frontend_fonts, frontend_experts, frontend_suspicious, frontend_levels = frontend_statuses(selection)
-            levels_map={uid: box.get('damage_level') for uid,box in ctx['active']['regions'].items()}
+            levels_map={uid: (1 if box.get('status') == 'damaged' and box.get('damage_level') is None else box.get('damage_level')) for uid,box in ctx['active']['regions'].items()}
             fonts_map={uid: box['unavailable_font'] for uid,box in ctx['active']['regions'].items()}
             suspicious_map={uid: box['suspicious'] for uid,box in ctx['active']['regions'].items()}
             experts_map={uid: box['expert_prediction'] for uid,box in ctx['active']['regions'].items()}
@@ -1049,7 +1053,10 @@ def create_app(options):
                             (str(box_id) if str(box_id) in ctx['active']['regions'] else None))
                 if region_uid and region_uid in statuses:
                     statuses[region_uid]=status_name
-                    levels_map[region_uid]=frontend_levels.get(box_id, levels_map[region_uid])
+                    lvl = frontend_levels.get(box_id, levels_map[region_uid])
+                    if status_name == 'damaged' and lvl is None:
+                        lvl = 1
+                    levels_map[region_uid]=lvl
                     suspicious_map[region_uid]=frontend_suspicious.get(box_id, suspicious_map[region_uid])
                     fonts_map[region_uid]=frontend_fonts.get(box_id, fonts_map[region_uid])
                     experts_map[region_uid]=frontend_experts.get(box_id, experts_map[region_uid])
@@ -1234,6 +1241,28 @@ def create_app(options):
 if __name__=='__main__':
     logging.basicConfig(level=logging.INFO,format='%(levelname)s: %(message)s')
     args=parser().parse_args()
-    create_app(args).queue().launch(server_name=args.server_name,server_port=args.port,share=args.share,css=APP_CSS,
-        theme=gr.themes.Base(font=['Arial', 'sans-serif'], font_mono=['monospace']), footer_links=[],
-        allowed_paths=[str(Path(args.image_dir).resolve())])
+    if args.port is None and args.tunnel != 'none':
+        args.port = 7830
+    tunnel_port = args.port or 7830
+    if args.tunnel == 'cloudflare':
+        try:
+            from tunnel import start_cloudflare_tunnel
+        except ImportError:
+            from gradio.tunnel import start_cloudflare_tunnel
+        start_cloudflare_tunnel(tunnel_port)
+    elif args.tunnel == 'ngrok':
+        try:
+            from tunnel import start_ngrok_tunnel
+        except ImportError:
+            from gradio.tunnel import start_ngrok_tunnel
+        start_ngrok_tunnel(tunnel_port, token=args.ngrok_token)
+
+    create_app(args).queue().launch(
+        server_name=args.server_name,
+        server_port=args.port,
+        share=args.share if args.tunnel == 'none' else False,
+        css=APP_CSS,
+        theme=gr.themes.Base(font=['Arial', 'sans-serif'], font_mono=['monospace']),
+        footer_links=[],
+        allowed_paths=[str(Path(args.image_dir).resolve())],
+    )

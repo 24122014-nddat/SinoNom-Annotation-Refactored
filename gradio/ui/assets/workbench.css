@@ -457,9 +457,12 @@ body,
 .panel { align-self: stretch; min-width: 0; height: auto; overflow: visible; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-panel); }
 #workspace:has(#control-panel[style*="display: flex"]) > #control-panel {
   height: auto;
-  max-height: none;
+  max-height: min(850px, calc(100dvh - 120px)) !important;
   min-width: 0;
+  overflow-y: auto !important;
   overflow-x: hidden;
+  position: sticky;
+  top: 12px;
 }
 #workspace:has(#control-panel[style*="display: flex"]) > #main-workspace {
   height: auto !important;
@@ -474,12 +477,29 @@ body,
   width: 100%;
   min-width: 0 !important;
   min-height: 0;
-  max-height: none;
+  max-height: min(850px, calc(100dvh - 120px)) !important;
+  position: sticky;
+  top: 12px;
   padding: var(--card-padding);
-  overflow-y: auto;
-  scrollbar-color: #4a4d53 transparent;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--color-accent, #ff7a1a) var(--color-page, #0b0d0f);
   scrollbar-width: thin;
   overflow-x: hidden;
+}
+#control-panel::-webkit-scrollbar {
+  width: 8px;
+}
+#control-panel::-webkit-scrollbar-track {
+  background: var(--color-page, #0b0d0f);
+  border-radius: 4px;
+}
+#control-panel::-webkit-scrollbar-thumb {
+  background: var(--color-accent, #ff7a1a);
+  border-radius: 4px;
+}
+#control-panel::-webkit-scrollbar-thumb:hover {
+  background: #ff9447;
 }
 #control-panel > *,
 #control-panel .sidebar-step-stack > * {

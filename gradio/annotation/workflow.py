@@ -449,6 +449,8 @@ class Workflow:
                 # Detector output is an intermediate document: initialize annotation flags.
                 for box in doc['bounding_boxes'].values():
                     box.update(unknown=False, unavailable_font=False, expert_prediction=False, suspicious=False)
+                    if box.get('status') == 'damaged' and box.get('damage_level') is None:
+                        box['damage_level'] = 1
                 validate_document(doc, s['image'], s['image_size'])
                 s['regions'] = {uuid4().hex: deepcopy(box) for box in doc['bounding_boxes'].values()}
                 s['selected_region_uid'] = next(iter(s['regions']), None)

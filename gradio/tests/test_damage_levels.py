@@ -29,8 +29,8 @@ class DamageLevels(unittest.TestCase):
         s = self.state()
         uid = s['region_uid_by_box_id']['1']
         update_status(s, uid, 'damaged')
-        with self.assertRaisesRegex(ValueError, 'boxes: 1'):
-            confirm_status(s)
+        confirm_status(s)
+        self.assertEqual(s['bounding_boxes']['1']['damage_level'], 1)
         for level in (1, 2, 3):
             update_status(s, uid, 'damaged', damage_level=level)
             confirm_status(s)
@@ -42,10 +42,11 @@ class DamageLevels(unittest.TestCase):
                                  damage_levels={u: level for u in s['regions']})
             self.assertEqual(s, before)
         update_status(s, uid, 'intact')
+        self.assertIsNone(s['regions'][uid]['damage_level'])
         update_status(s, uid, 'damaged', expert_prediction=True)
-        self.assertIsNone(s['regions'][uid]['damage_level'])
+        self.assertEqual(s['regions'][uid]['damage_level'], 1)
         initialize_alignment(s, list(reversed(s['regions'])))
-        self.assertIsNone(s['regions'][uid]['damage_level'])
+        self.assertEqual(s['regions'][uid]['damage_level'], 1)
 
     def test_apply_commits_draft_and_order_atomically_without_file(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -68,16 +69,15 @@ class DamageLevels(unittest.TestCase):
                        'unknowns': {'1': False, '2': False},
                        'textSequence': ['寺', '永']}
             result = apply(ctx, json.dumps(payload), 'intact')
-            self.assertEqual(result[0], ctx)
-            self.assertEqual(result[8], {'__type__': 'update'})
-            self.assertFalse((root / 'out' / '1.json').exists())
-            self.assertEqual(ctx['active']['bounding_boxes']['1']['status'], 'intact')
+            committed = result[0]['active']
+            self.assertEqual(committed['bounding_boxes']['1']['status'], 'damaged')
+            self.assertEqual(committed['bounding_boxes']['1']['damage_level'], 1)
+            self.assertEqual(committed['annotations'], {'1': '寺', '2': '永'})
             payload['damage_levels']['1'] = 2
-            result = apply(ctx, json.dumps(payload), 'intact')
+            result = apply(result[0], json.dumps(payload), 'intact')
             committed = result[0]['active']
             self.assertEqual(committed['current_step'], 4)
             self.assertEqual(committed['bounding_boxes']['1']['status'], 'damaged')
-            self.assertEqual(committed['annotations'], {'1': '寺', '2': '永'})
             self.assertEqual(committed['bounding_boxes']['1']['damage_level'], 2)
             self.assertFalse((root / 'out' / '1.json').exists())
             before = deepcopy(result[0])
@@ -148,7 +148,7 @@ class DamageLevels(unittest.TestCase):
             before = deepcopy(ctx)
             result = apply(ctx, json.dumps(dict(
                 textSequence=['永', '寺', 'MISS'], tokenOrder=['1', '2', '3'],
-                statuses={'1': 'damaged'}, damage_levels={'1': None})), 'intact')
+                statuses={'1': 'damaged'}, damage_levels={'1': 99})), 'intact')
             self.assertEqual(result[0], before)
             # gr.skip() leaves the browser draft and its live X untouched.
             self.assertEqual(result[8], {'__type__': 'update'})
