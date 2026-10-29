@@ -472,9 +472,11 @@ body,
 #control-panel {
   display: flex !important;
   flex-direction: column !important;
+  flex-wrap: nowrap !important;
   align-items: stretch !important;
   gap: var(--space-3) !important;
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   min-width: 0 !important;
   min-height: 0;
   max-height: min(850px, calc(100dvh - 120px)) !important;
@@ -486,6 +488,7 @@ body,
   scrollbar-color: var(--color-accent, #ff7a1a) var(--color-page, #0b0d0f);
   scrollbar-width: thin;
   overflow-x: hidden;
+  box-sizing: border-box !important;
 }
 #control-panel::-webkit-scrollbar {
   width: 8px;
@@ -505,7 +508,9 @@ body,
 #control-panel .sidebar-step-stack > * {
   align-self: stretch;
   width: 100% !important;
+  max-width: 100% !important;
   min-width: 0 !important;
+  flex-shrink: 0 !important;
   box-sizing: border-box;
 }
 #control-panel .sidebar-step-stack > * > button { width: 100% !important; }
@@ -585,11 +590,39 @@ button#next-button::after { transform: rotate(180deg); }
   box-shadow: none !important;
 }
 #control-panel .sidebar-step-stack {
-  display: flex;
-  flex-direction: column;
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
   gap: var(--space-3) !important;
-  width: 100%;
-  min-width: 0;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+#control-panel .sidebar-step-stack > .styler,
+#control-panel .sidebar-step-stack > .form,
+#control-panel .sidebar-step-stack > .styler > .form {
+  display: flex !important;
+  flex-direction: column !important;
+  flex-wrap: nowrap !important;
+  gap: var(--space-3) !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+#control-panel .sidebar-step-stack > .form:not(:has(> :not([style*="display: none"]):not(.frontend-bridge):not(.hide))) {
+  display: none !important;
+}
+#control-panel .sort-widget-section {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
 }
 #selection-guide-host,
 #validation-summary-host {
@@ -1093,7 +1126,7 @@ button#clear-source-mismatch:hover { background: var(--color-panel-hover) !impor
   #workspace:has(#control-panel[style*="display: flex"]) > #main-workspace { height: auto !important; min-height: 0; }
   .panel { height: auto; }
   #main-workspace { min-height: 0; }
-  #control-panel { height: auto; max-height: none; padding: var(--space-4); overflow: visible; }
+  #control-panel { height: auto; max-height: none; padding: var(--space-4); overflow: visible; flex-wrap: nowrap !important; }
   #sidebar-source-text .sidebar-source-text { height: auto; }
   #sidebar-source-text .sidebar-source-text p {
     flex: 0 1 auto;
