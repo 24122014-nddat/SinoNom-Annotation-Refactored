@@ -414,4 +414,5 @@ Records are written to `paths.output_json`; structural review items go to `<outp
 > [!NOTE]
 > Parts of the Gradio interface were developed with AI-assisted coding tools. The current implementation prioritizes annotation functionality and has not undergone a comprehensive architectural refactoring. Review the code and tests before adapting it for production use.
 #   S i n o N o m - A n n o t a t i o n - R e f a c t o r e d  
+ #   S i n o N o m - A n n o t a t i o n - R e f a c t o r e d  
  
