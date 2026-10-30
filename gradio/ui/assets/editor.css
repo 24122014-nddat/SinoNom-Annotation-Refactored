@@ -489,3 +489,9 @@ button:focus-visible { outline: 2px solid var(--color-accent, #ff7a1a); outline-
 
 /* Character text never inherits physical-condition colors. */
 .order-chip .tile-character { color: #ffffff; }
+
+/* Hide Run Detection button in Step 4 */
+#workspace:has(.status-order-board) #run-detection,
+.status-order-board #run-detection {
+  display: none !important;
+}

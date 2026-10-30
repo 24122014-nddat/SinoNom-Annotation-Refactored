@@ -505,8 +505,10 @@ class Workflow:
                 s['source_mismatch'] = None
         elif action in ('add', 'update', 'commit_boxes', 'delete', 'detect'):
             require(s, 'content_verified')
-            if step != 3:
-                raise ValueError('Edit bounding boxes in Step 3.')
+            if action == 'detect' and step != 3:
+                raise ValueError('Run detection in Step 3.')
+            if step not in (3, 4):
+                raise ValueError('Edit bounding boxes in Step 3 or Step 4.')
             if action == 'detect':
                 if getattr(self.options, 'skip_detection', False):
                     raise ValueError('Detection is disabled (--skip-detection). Draw boxes manually.')
@@ -557,8 +559,8 @@ class Workflow:
             raise ValueError('sort_boxes_calc is calculation-only and must use the UI adapter.')
         elif action == 'sort_boxes':
             require(s, 'content_verified')
-            if step != 3:
-                raise ValueError('Sort bounding boxes in Step 3.')
+            if step not in (3, 4):
+                raise ValueError('Sort bounding boxes in Step 3 or Step 4.')
             refresh_bbox_validation(s)
             if not (s['workflow']['bbox_valid'] or source_mismatch_confirmed(s)):
                 raise ValueError('Confirm a source mismatch before sorting unmatched boxes.')
@@ -571,8 +573,8 @@ class Workflow:
             else:
                 invalidate(s, clear=True)
         elif action == 'confirm_source_mismatch':
-            if step != 3:
-                raise ValueError('Confirm a source mismatch in Step 3.')
+            if step not in (3, 4):
+                raise ValueError('Confirm a source mismatch in Step 3 or Step 4.')
             require(s, 'content_verified')
             refresh_bbox_validation(s)
             issue_type = canonical_issue_type(payload.get('issue_type'))
@@ -596,12 +598,18 @@ class Workflow:
                 'issue_type': issue_type,
                 'note': note.strip(),
             }
-            invalidate(s, clear=True)
+            if step == 4:
+                invalidate(s, clear=False)
+            else:
+                invalidate(s, clear=True)
         elif action == 'clear_source_mismatch':
-            if step != 3:
-                raise ValueError('Clear a source mismatch in Step 3.')
+            if step not in (3, 4):
+                raise ValueError('Clear a source mismatch in Step 3 or Step 4.')
             s['source_mismatch'] = None
-            invalidate(s, clear=True)
+            if step == 4:
+                invalidate(s, clear=False)
+            else:
+                invalidate(s, clear=True)
             # Do not leave a previously materialized mismatch alignment usable.
             s['workflow']['bbox_valid'] = False
         elif action == 'select':
@@ -624,10 +632,12 @@ class Workflow:
                 s['selected_region_uids'] = selected
             else:
                 key = str(payload['id'])
+                if key not in s['bounding_boxes'] and key in s.get('box_id_by_region', {}):
+                    key = s['box_id_by_region'][key]
                 if key not in s['bounding_boxes']:
                     raise ValueError('Box does not exist.')
                 s['selected_box_id'] = key
-                s['selected_region_uid'] = s['region_uid_by_box_id'].get(key)
+                s['selected_region_uid'] = s.get('region_uid_by_box_id', {}).get(key, key)
                 s['selected_token_id'] = token_id_for_box(s, key)
         elif action == 'suspicious':
             if step != 4:

@@ -577,7 +577,7 @@ def create_app(options):
             counts_differ=bool(has and len(s['regions']) != count_annotation_characters(s['annotation_text']))
             rendered=[ctx,app_identity(s),gr.update(value=msg,visible=bool(msg)),
                     gr.update(visible=step==2 and has),gr.update(choices=choices,value=chosen),val,draft_preview,None,gr.update(value=snapshot(s),visible=step!=2),
-                    gr.update(visible=step==3 and has),gr.update(choices=region_ids,value=selected_region),*region_box['bbox'],
+                    gr.update(visible=(step in (3, 4)) and has),gr.update(choices=region_ids,value=selected_region),*region_box['bbox'],
                     gr.update(visible=step==4),gr.update(choices=box_ids,value=selected_box),
                     gr.update(choices=status_choices,value=status_box['status'],interactive=True),
                     None,json.dumps(s['reading_order']),gr.update(value=final),
@@ -585,11 +585,11 @@ def create_app(options):
                     gr.update(visible=step==7),
                     panel_heading(s),panel_summary(s),footer(s),gr.update(visible=step==2 and has),
                     gr.update(interactive=has and step>1),gr.update(interactive=has and step<7,visible=step<7),
-                    status_rows(s),gr.update(visible=step==3 and has),
+                    status_rows(s),gr.update(visible=(step in (3, 4)) and has),
                     gr.update(value=issue.get('issue_type')),
                     gr.update(value=issue.get('note','')),
-                    gr.update(interactive=has and step==3),gr.update(visible=mismatch),
-                    gr.update(visible=has and step == 3),
+                    gr.update(interactive=has and (step in (3, 4))),gr.update(visible=mismatch),
+                    gr.update(visible=has and (step in (3, 4))),
                     workflow_progress(s),LOADING_HIDDEN,
                     gr.update(visible=step==1),gr.update(visible=has and step>1),
                     gr.update(visible=has and step>1),gr.update(visible=has and step>1),
@@ -852,6 +852,9 @@ def create_app(options):
                     return render(ctx, WARNING+' '+html.escape(str(exc)))
             if ctx['active']['current_step'] == 4:
                 try:
+                    boxes = frontend_boxes(selection)
+                    if boxes is not None:
+                        ctx, _, _ = commit_frontend_boxes(ctx, selection)
                     ctx = commit_status_order(ctx, selection, status_value)
                 except Exception as exc:
                     return render(ctx, WARNING+' '+html.escape(str(exc)))
@@ -1095,6 +1098,9 @@ def create_app(options):
         def apply_status_changes(ctx, selection, status_value):
             try:
                 from annotation.status import require_damage_levels
+                boxes = frontend_boxes(selection)
+                if boxes is not None:
+                    ctx, _, _ = commit_frontend_boxes(ctx, selection)
                 candidate = commit_status_order(ctx, selection, status_value)
                 require_damage_levels(candidate['active'])
                 return render(candidate)
@@ -1213,8 +1219,8 @@ def create_app(options):
                     refresh_bbox_validation(transient)
                     if not transient['workflow']['content_verified']:
                         raise ValueError('Verify the content before sorting boxes.')
-                    if transient['current_step'] != 3:
-                        raise ValueError('Sort bounding boxes in Step 3.')
+                    if transient['current_step'] not in (3, 4):
+                        raise ValueError('Sort bounding boxes in Step 3 or Step 4.')
                     if not (transient['workflow']['bbox_valid'] or source_mismatch_confirmed(transient)):
                         raise ValueError('Confirm a source mismatch before sorting unmatched boxes.')
                     boxes={

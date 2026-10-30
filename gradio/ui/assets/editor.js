@@ -22,7 +22,7 @@ const imageTransform = { zoom: 100, width: props.value.width, height: props.valu
 
 const canEditReadingOrder = () => {
   const step = props.value?.step || 1;
-  return step === 3 && Boolean(props.value?.contentVerified);
+  return [3, 4].includes(step) && Boolean(props.value?.contentVerified);
 };
 
 const canSortBoxes = () => {
@@ -69,7 +69,7 @@ const updateValidationSummary = () => {
     && Boolean(props.value.mismatchConfirmed)
     && confirmedBoxCount === boxCount;
   const matched = contentVerified && boxCount === charCount && charCount > 0;
-  const canOrder = props.value.step === 3 && contentVerified;
+  const canOrder = [3, 4].includes(props.value.step) && contentVerified;
 
 
   const badge = summaryHost.querySelector('.validation-badge');
@@ -91,7 +91,7 @@ const updateValidationSummary = () => {
   }
 
   const mismatchGroup = root.querySelector('.mismatch-panel') || root.querySelector('#mismatch_group');
-  if (mismatchGroup && props.value.step === 3) {
+  if (mismatchGroup && [3, 4].includes(props.value.step)) {
     // Matching counts still allow a confirmed Other source issue.
     mismatchGroup.style.display = 'block';
   }
@@ -197,6 +197,8 @@ const setInputValue = (selector, value) => {
 };
 const syncExternalControls = () => {
   updateValidationSummary();
+  const detectBtn = root.querySelector('#run-detection') || document.getElementById('run-detection');
+  if (detectBtn) detectBtn.style.display = (props.value?.step === 3 ? '' : 'none');
   const bridgeSnapshot = {
     active: activeBoxId,
     selected: [...selectedIds],
@@ -550,6 +552,9 @@ const hydrateLocalState = () => {
       });
     }
     isDirty = true;
+    if (props.value.step === 4 && alignmentContainer) {
+      updateExcludedChips(alignmentContainer);
+    }
   }
   if (props.value.step !== 7) updateCanvasLabels();
 
@@ -976,11 +981,16 @@ const updateExcludedChips = container => {
   restoreOrderDragStatuses(orderDrag);
   const chips = [...container.querySelectorAll('[data-order-chip]')];
   const count = Number(container.dataset.excludedCount || 0);
+  const sortedBoxes = Object.entries(localBoxes)
+    .filter(([, b]) => b.order != null)
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([id]) => id);
+  const spatialIds = sortedBoxes.length ? sortedBoxes : (props.value.spatialBoxOrder || []);
   chips.forEach((chip, index) => {
     const excluded = count > 0 && index >= chips.length - count;
     chip.classList.toggle('excluded', excluded);
     chip.title = excluded ? 'Excluded from annotation data' : chip.dataset.character;
-    const boxId = excluded ? '' : String((props.value.spatialBoxOrder || [])[index] || '');
+    const boxId = excluded ? '' : String(spatialIds[index] || '');
     if (boxId) chip.dataset.assignedBoxId = boxId; else delete chip.dataset.assignedBoxId;
     chip.classList.toggle('suspicious', Boolean(localBoxes[boxId]?.suspicious) && !excluded && chip.dataset.character !== 'MISS');
   });
@@ -1252,7 +1262,7 @@ element.addEventListener('pointerdown', event => {
   const toggle = event.ctrlKey || event.metaKey;
   if ([3, 4, 5, 7].includes(mode)) {
     if (group) {
-      if (toggle && mode === 3) {
+      if (toggle && [3, 4].includes(mode)) {
         const next = new Set(selectedIds);
         if (next.has(id)) next.delete(id); else next.add(id);
         setSelection([...next], next.has(id) ? id : [...next].at(-1));
@@ -1260,7 +1270,7 @@ element.addEventListener('pointerdown', event => {
       }
       if (!selectedIds.has(id)) setSelection([id], id);
       else { activeBoxId = id; renderSelection(); }
-      if (mode !== 3) {
+      if (![3, 4].includes(mode)) {
         event.preventDefault(); return;
       }
       const p = point(event, svg);
@@ -1276,9 +1286,9 @@ element.addEventListener('pointerdown', event => {
         };
       }
     } else {
-      if (mode === 4) { setSelection([], null); event.preventDefault(); return; }
+      if (mode === 4 && !event.altKey) { setSelection([], null); event.preventDefault(); return; }
       const p = point(event, svg);
-      if (mode === 3 && event.altKey) {
+      if ([3, 4].includes(mode) && event.altKey) {
         moving = { kind: 'add', svg, p, rect: createOverlayRect(svg, 'selection-marquee') };
       } else {
         moving = {
@@ -1795,6 +1805,32 @@ window.addEventListener('keydown', event => {
   }
 
   if (props.value.step === 4) {
+    // Key "Delete" or "Backspace": Delete selected box(es)
+    if (event.key === 'Delete' || event.key === 'Backspace') {
+      const activeEl = document.activeElement;
+      const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+      if (!isInput) {
+        const targets = selectedIds.size ? [...selectedIds] : (activeBoxId ? [activeBoxId] : []);
+        if (targets.length) {
+          const beforeIds = Object.keys(localBoxes);
+          targets.forEach(id => {
+            delete localBoxes[id];
+            groupFor(id)?.remove();
+          });
+          selectedIds.clear();
+          activeBoxId = null;
+          clearAllBoxOrders();
+          mismatchConfirmationInvalidated = true;
+          clearMismatchIssueSelection();
+          isDirty = true;
+          renderSelection();
+          traceTransition(`DELETE ${targets.length}`, beforeIds);
+          event.preventDefault();
+          return;
+        }
+      }
+    }
+
     if (!activeBoxId || !localBoxes[activeBoxId]) return;
     const box = localBoxes[activeBoxId];
     const key = event.key.toLowerCase();

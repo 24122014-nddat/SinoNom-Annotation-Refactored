@@ -112,7 +112,7 @@ def snapshot(s):
     elif step == 7 and other_mismatch:
         boxes=s['regions'];selected_id=None;selected_ids=set()
     else:
-        boxes = s['bounding_boxes']
+        boxes = s['bounding_boxes'] if s.get('bounding_boxes') else s.get('regions', {})
         selected_id = s['selected_box_id'] if (s['selected_box_id'] and s['selected_box_id'] in boxes) else None
         selected_ids = {selected_id} if selected_id else set()
     filename=html.escape(s['image'])
@@ -169,8 +169,8 @@ def snapshot(s):
         else:
             label=html.escape(key+' '+s['annotations'].get(key,'')) if public_box else ''
         dashed=''
-        identity_attr = (f'data-box-id="{key}" data-region-uid="{key}"'
-                         if step == 3 else f'data-box-id="{key}"')
+        identity_attr = (f'data-box-id="{key}" data-region-uid="{s.get("region_uid_by_box_id", {}).get(str(key), key)}"'
+                         if step in (3, 4) else f'data-box-id="{key}"')
         identity_attr += f' data-status="{b["status"]}" data-unknown="{str(is_unknown).lower()}"'
         identity_attr += f' data-unavailable-font="{str(unavailable_font).lower()}" data-expert-prediction="{str(expert_prediction).lower()}"'
         identity_attr += f' data-suspicious="{str(suspicious).lower()}"'
@@ -187,7 +187,7 @@ def snapshot(s):
             {f'<text data-box-order-label="1" x="{(x1+x2)/2}" y="{max(font_size, y1-3*unit)}" text-anchor="middle" fill="{text_color if reveal_status else stroke_color}" font-size="{font_size}" font-family="var(--han-nom-font, &quot;Vietnamica NomNaTong&quot;, &quot;Vietnamica DengXian&quot;, sans-serif)" pointer-events="none" paint-order="stroke" stroke="#17191c" stroke-width="{stroke_width}">{label}</text>' if label else ''}'''
         # Handles are pre-rendered for local selection changes; CSS exposes
         # them only on the browser-local active region.
-        if step in (3, 6):
+        if step in (3, 4, 6):
             for n, (cx, cy) in enumerate([(x1,y1),(x2,y1),(x2,y2),(x1,y2)]):
                 markup += f'<circle data-corner="{n}" cx="{cx}" cy="{cy}" r="{max(10*unit, 16)}" fill="#000" stroke="none" opacity="0" pointer-events="all"/>'
         markup+='</g>'
