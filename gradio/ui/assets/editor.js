@@ -1778,6 +1778,155 @@ window.addEventListener('keydown', event => {
   }
 });
 
+window.addEventListener('keydown', event => {
+  const activeElem = document.activeElement;
+  if (activeElem && (activeElem.tagName === 'INPUT' || activeElem.tagName === 'TEXTAREA' || activeElem.isContentEditable)) {
+    return;
+  }
+
+  // Key "q": Toggle Show image only vs With bounding box
+  if (event.key === 'q' || event.key === 'Q') {
+    const showImgCheckbox = root.querySelector('#show-image-only input[type="checkbox"]');
+    if (showImgCheckbox) {
+      showImgCheckbox.click();
+      event.preventDefault();
+      return;
+    }
+  }
+
+  if (props.value.step === 4) {
+    if (!activeBoxId || !localBoxes[activeBoxId]) return;
+    const box = localBoxes[activeBoxId];
+    const key = event.key.toLowerCase();
+
+    // Key "1", "2", "3": Damaged level 1, 2, 3
+    if (['1', '2', '3'].includes(event.key)) {
+      box.status = 'damaged';
+      box.damage_level = Number(event.key);
+      renderLocalStatus(activeBoxId, 'damaged', box.unknown);
+      syncExternalControls();
+      event.preventDefault();
+      return;
+    }
+
+    // Key "i": Intact
+    if (key === 'i') {
+      box.status = 'intact';
+      box.damage_level = null;
+      box.unknown = false;
+      renderLocalStatus(activeBoxId, 'intact', false);
+      syncExternalControls();
+      event.preventDefault();
+      return;
+    }
+
+    // Key "f": Toggle Unavailable Font
+    if (key === 'f') {
+      if (groupFor(activeBoxId)?.querySelector('rect')?.dataset.missing !== '1') {
+        const enabled = !box.unavailable_font;
+        box.unavailable_font = enabled;
+        if (enabled) box.unknown = false;
+        renderLocalStatus(activeBoxId, box.status, box.unknown);
+        syncExternalControls();
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // Key "c": Toggle Unknown Character (damaged only)
+    if (key === 'c') {
+      if (groupFor(activeBoxId)?.querySelector('rect')?.dataset.missing !== '1') {
+        if (box.status !== 'damaged') {
+          box.status = 'damaged';
+          if (box.damage_level == null) box.damage_level = 1;
+        }
+        const isUnknown = !box.unknown;
+        box.unknown = isUnknown;
+        if (isUnknown) {
+          box.unavailable_font = false;
+          box.expert_prediction = false;
+          box.suspicious = false;
+        }
+        renderLocalStatus(activeBoxId, 'damaged', isUnknown);
+        syncExternalControls();
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // Key "e": Toggle Expert Prediction
+    if (key === 'e') {
+      if (groupFor(activeBoxId)?.querySelector('rect')?.dataset.missing !== '1') {
+        const enabled = !box.expert_prediction;
+        if (enabled) {
+          box.status = 'damaged';
+          if (box.damage_level == null) box.damage_level = 1;
+          box.unknown = false;
+        }
+        box.expert_prediction = enabled;
+        renderLocalStatus(activeBoxId, box.status, box.unknown);
+        syncExternalControls();
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // Key "s": Toggle Suspicious Annotation
+    if (key === 's') {
+      const chip = element.querySelector(`[data-order-chip][data-assigned-box-id="${activeBoxId}"]`);
+      if (chip && !chip.classList.contains('missing') && !chip.classList.contains('excluded')) {
+        box.suspicious = !box.suspicious;
+        if (box.suspicious) box.unknown = false;
+        renderSuspiciousPreview();
+        renderSelection();
+        syncExternalControls();
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // Key "m": Insert <miss> at selected box position
+    if (key === 'm') {
+      const container = element.querySelector('.order-chips');
+      if (container) {
+        const targetChip = container.querySelector(`[data-order-chip][data-assigned-box-id="${activeBoxId}"]`);
+        if (targetChip) {
+          const missChips = [...container.querySelectorAll('[data-order-chip]')].filter(c => c.dataset.character === 'MISS' || c.classList.contains('missing'));
+          const missChip = missChips.reverse().find(c => c !== targetChip);
+          if (missChip) {
+            container.insertBefore(missChip, targetChip);
+            updateExcludedChips(container);
+            localTextSequence = textSequenceFromDOM(container);
+            localTokenOrder = tokenOrderFromDOM(container);
+            renderSelection();
+            syncExternalControls();
+          }
+        }
+      }
+      event.preventDefault();
+      return;
+    }
+
+    // Key "x": Move character to excluded area (end of container)
+    if (key === 'x') {
+      const container = element.querySelector('.order-chips');
+      if (container) {
+        const targetChip = container.querySelector(`[data-order-chip][data-assigned-box-id="${activeBoxId}"]`);
+        if (targetChip && !targetChip.classList.contains('excluded')) {
+          container.appendChild(targetChip);
+          updateExcludedChips(container);
+          localTextSequence = textSequenceFromDOM(container);
+          localTokenOrder = tokenOrderFromDOM(container);
+          renderSelection();
+          syncExternalControls();
+        }
+      }
+      event.preventDefault();
+      return;
+    }
+  }
+});
+
 const alignmentObserver = new MutationObserver(() => {
   if (props.value.step !== 4) return;
   const container = element.querySelector('.order-chips');

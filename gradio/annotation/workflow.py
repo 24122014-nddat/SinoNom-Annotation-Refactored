@@ -4,6 +4,7 @@ import json
 import logging
 import shutil
 import tempfile
+import zipfile
 from collections import Counter
 from copy import deepcopy
 from pathlib import Path
@@ -70,6 +71,53 @@ def _carry_source_mismatch_if_same_case(state):
 
 def fingerprint(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+
+def _find_persisted_in_zip(path, output_dir=None):
+    path = Path(path)
+    stem = path.stem
+    code = stem.lstrip('0') or stem
+    search_dirs = [path.parent]
+    if output_dir:
+        search_dirs.append(Path(output_dir))
+    default_proc = Path('processed_data').resolve()
+    if default_proc.exists() and default_proc not in [d.resolve() for d in search_dirs]:
+        search_dirs.append(default_proc)
+
+    for sdir in search_dirs:
+        if not sdir.exists():
+            continue
+        for zfile in sdir.glob('*.zip'):
+            zstem = zfile.stem
+            prefix = zstem.split('_')[0]
+            if prefix not in (code, stem) and zstem not in (code, stem):
+                continue
+            try:
+                with zipfile.ZipFile(zfile, 'r') as z:
+                    namelist = z.namelist()
+                    saved_content = None
+                    if 'inscription_content.json' in namelist:
+                        cnt_list = json.loads(z.read('inscription_content.json').decode('utf-8'))
+                        if isinstance(cnt_list, list):
+                            for item in cnt_list:
+                                if item.get('image') == path.name:
+                                    saved_content = item.get('content')
+                                    break
+                    if 'source_mismatches.json' in namelist:
+                        mismatches = json.loads(z.read('source_mismatches.json').decode('utf-8'))
+                        if isinstance(mismatches, list):
+                            for doc in mismatches:
+                                if doc.get('image') == path.name:
+                                    return {'doc': doc, 'is_mismatch': True, 'content': saved_content, 'source': str(zfile)}
+                    if 'text_annotations.json' in namelist:
+                        annotations = json.loads(z.read('text_annotations.json').decode('utf-8'))
+                        if isinstance(annotations, list):
+                            for doc in annotations:
+                                if doc.get('image') == path.name:
+                                    return {'doc': doc, 'is_mismatch': False, 'content': saved_content, 'source': str(zfile)}
+            except Exception as exc:
+                log.warning('Error reading zip archive %s: %s', zfile, exc)
+    return None
 
 
 def _load_regions(state, document):
@@ -205,14 +253,32 @@ class Workflow:
             raise ValueError('Both a normal annotation and source mismatch exist for this image.')
         saved_crop = None
         persisted = saved if saved.exists() else mismatch_saved if mismatch_saved.exists() else None
-        if persisted:
-            restored_content = self._saved_content_for(path.name, located['code'], located['record'])
-            state.update(source_content=deepcopy(restored_content),
-                         source_baseline=deepcopy(restored_content),
-                         draft_content=deepcopy(restored_content))
-            is_mismatch = persisted == mismatch_saved
-            doc = (load_source_mismatch(persisted, path.name, size) if is_mismatch
-                   else load_annotation(persisted, path.name, size))
+        zip_persisted = None
+        if not persisted:
+            zip_persisted = _find_persisted_in_zip(path, self.output)
+        if persisted or zip_persisted:
+            if persisted:
+                restored_content = self._saved_content_for(path.name, located['code'], located['record'])
+                state.update(source_content=deepcopy(restored_content),
+                             source_baseline=deepcopy(restored_content),
+                             draft_content=deepcopy(restored_content))
+                is_mismatch = persisted == mismatch_saved
+                doc = (load_source_mismatch(persisted, path.name, size) if is_mismatch
+                       else load_annotation(persisted, path.name, size))
+            else:
+                if zip_persisted.get('content'):
+                    saved_content = zip_persisted['content']
+                    restored_content = deepcopy(located['record'])
+                    for field in content_fields(restored_content, located['code'], self.content_titles, self.metadata_fields):
+                        if field['title'] in saved_content:
+                            restored_content = edit_content_field(
+                                restored_content, located['code'], field['path'], saved_content[field['title']] or '',
+                                self.content_titles, self.metadata_fields)
+                    state.update(source_content=deepcopy(restored_content),
+                                 source_baseline=deepcopy(restored_content),
+                                 draft_content=deepcopy(restored_content))
+                is_mismatch = zip_persisted['is_mismatch']
+                doc = zip_persisted['doc']
             hydrate_doc=doc
             if is_mismatch and source_mismatch_type(doc) == 'other':
                 hydrate_doc={

@@ -313,12 +313,20 @@ def create_app(options):
     except (ValueError,OSError) as exc:
         images=[]; startup=str(exc)
 
+    all_images = list(images)
+    proc_dir = Path('processed_data')
+    if proc_dir.is_dir():
+        for p in sorted(proc_dir.iterdir()):
+            if p.is_file() and p.suffix.lower() in ('.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp', '.bmp'):
+                if str(p.resolve()) not in {str(img.resolve()) for img in all_images}:
+                    all_images.append(p)
+
     def has_saved_image_records():
         output=Path(options.output_dir)
         return any(
             (output/(image.stem+'.json')).is_file()
             or (output/'source_mismatches'/(image.stem+'.json')).is_file()
-            for image in images
+            for image in all_images
         )
 
     initial=dict(active=new_state(), drafts={})
@@ -362,7 +370,7 @@ def create_app(options):
             with gr.Column(elem_id='image-start', min_width=0, elem_classes='panel') as image_start:
                 gr.Markdown('## Select an image')
                 gr.Markdown('Choose an inscription image to begin or reopen saved annotation data.')
-                image_choice=gr.Dropdown(choices=[(p.name,str(p.resolve())) for p in images],label='Image')
+                image_choice=gr.Dropdown(choices=[((f"{p.name} [{p.parent.name}]" if p.parent.name == 'processed_data' else p.name), str(p.resolve())) for p in all_images],label='Image')
                 open_button=gr.Button('Start Verification', variant='primary')
             with gr.Column(visible=False, elem_id='control-panel', min_width=0,
                            elem_classes='panel') as control_panel:
@@ -618,7 +626,7 @@ def create_app(options):
                     fresh=new_state()
                     fresh['revision']=updated['revision']+1
                     ctx=dict(ctx,active=fresh)
-                if auto_detect and action=='next' and updated['current_step']==3 and not updated['detection_loaded'] and not skip_detection:
+                if auto_detect and action=='next' and updated['current_step']==3 and not updated['detection_loaded'] and not updated.get('regions') and not skip_detection:
                     try:
                         ctx=dict(ctx,active=engine.apply(updated,'detect'))
                     except Exception as exc:
@@ -654,7 +662,7 @@ def create_app(options):
                      active.get('current_step'),active.get('revision'),cached,
                      sorted(Path(key).name for key in ctx.get('drafts',{})))
             try:
-                if path not in {str(p.resolve()) for p in images}:raise ValueError('Select an image from the list.')
+                if path not in {str(p.resolve()) for p in all_images}:raise ValueError('Select an image from the list.')
                 ctx=deepcopy(ctx)
                 old=ctx['active']
                 # Step 1 is the image picker. Keep drafts for states that have
@@ -877,7 +885,9 @@ def create_app(options):
                 crop_coordinates=crop_coordinates)
             state = result[0]['active']
             needs_detection = (state['current_step'] == 3 and
-                               not state['detection_loaded'] and not skip_detection)
+                               not state['detection_loaded'] and
+                               not state.get('regions') and
+                               not skip_detection)
             if needs_detection:
                 result[2] = gr.update(value='Running detection…', visible=True)
                 result[29] = gr.update(interactive=False)
@@ -1264,5 +1274,9 @@ if __name__=='__main__':
         css=APP_CSS,
         theme=gr.themes.Base(font=['Arial', 'sans-serif'], font_mono=['monospace']),
         footer_links=[],
-        allowed_paths=[str(Path(args.image_dir).resolve())],
+        allowed_paths=[
+            str(Path(args.image_dir).resolve()),
+            *([str(Path('processed_data').resolve())] if Path('processed_data').is_dir() else []),
+            *([str(Path(args.output_dir).resolve())] if Path(args.output_dir).is_dir() else []),
+        ],
     )

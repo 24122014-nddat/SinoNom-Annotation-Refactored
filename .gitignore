@@ -234,3 +234,7 @@ annotations.zip
 # External detection checkpoints, packaged executables and preprocessed images
 # are ignored by text_detection/models/.gitignore and
 # text_detection/work/.gitignore. Their .gitkeep files remain tracked.
+
+# Local tutorial PDF
+*Tutorial*.pdf
+
